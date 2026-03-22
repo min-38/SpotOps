@@ -52,9 +52,9 @@ public class LoginModel : PageModel
 
         return user.Role switch
         {
-            Models.UserRole.Organizer => RedirectToPage("/organizer/dashboard"),
-            Models.UserRole.Admin => RedirectToPage("/admin/dashboard"),
-            _ => RedirectToPage("/events/index")
+            Models.UserRole.Organizer => RedirectToPage("/Index"),
+            Models.UserRole.Admin => RedirectToPage("/Index"),
+            _ => RedirectToPage("/Index")
         };
     }
 }

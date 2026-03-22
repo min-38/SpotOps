@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using SpotOps.Data;
 using SpotOps.Models;
 
-namespace SpotOps.Pages.auth;
+namespace SpotOps.Pages.Auth;
 
 public class RegisterModel : PageModel
 {
@@ -56,7 +56,7 @@ public class RegisterModel : PageModel
         // 주최자면 Organizer도 생성
         if (Input.Role == UserRole.Organizer)
         {
-            var organizer = new Organizer
+            var organizer = new SpotOps.Models.Organizer
             {
                 UserId = user.Id,
                 BusinessNumber = Input.BusinessNumber ?? "",

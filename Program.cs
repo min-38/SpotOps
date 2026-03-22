@@ -24,13 +24,6 @@ var connStr = $"Host={host};Port={port};Database={db};Username={user};Password={
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseNpgsql(connStr));
 
-// 인증
-builder.Services.AddAuthentication("Cookies")
-    .AddCookie(opt => {
-        opt.LoginPath = "/login";
-        opt.ExpireTimeSpan = TimeSpan.FromDays(7);
-    });
-
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -41,6 +34,7 @@ if (!app.Environment.IsDevelopment())
 
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
