@@ -1,0 +1,84 @@
+@page "/auth/register"
+@model SpotOps.Features.Auth.Register.ViewModel
+@{
+    ViewData["Title"] = "회원가입";
+}
+
+<h2>회원가입</h2>
+
+<div id="register-error" class="alert alert-danger d-none" role="alert"></div>
+
+<form id="register-form">
+    <div class="mb-2">
+        <label class="form-label">이름</label>
+        <input class="form-control" id="name" name="name" required />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">이메일</label>
+        <input class="form-control" type="email" id="email" name="email" required />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">비밀번호</label>
+        <input class="form-control" type="password" id="password" name="password" required />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">전화번호</label>
+        <input class="form-control" id="phone" name="phone" />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">가입 유형</label>
+        <select class="form-select" id="role" name="role">
+            <option value="Buyer">구매자</option>
+            <option value="Organizer">주최자</option>
+        </select>
+    </div>
+    <div id="organizer-fields" class="d-none">
+        <div class="mb-2">
+            <label class="form-label">사업자번호</label>
+            <input class="form-control" id="businessNumber" name="businessNumber" />
+        </div>
+        <div class="mb-2">
+            <label class="form-label">회사명</label>
+            <input class="form-control" id="companyName" name="companyName" />
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary">가입하기</button>
+</form>
+
+@section Scripts {
+    <script>
+        const roleSelect = document.getElementById('role');
+        const orgFields = document.getElementById('organizer-fields');
+        roleSelect.addEventListener('change', () => {
+            orgFields.classList.toggle('d-none', roleSelect.value !== 'Organizer');
+        });
+
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const err = document.getElementById('register-error');
+            err.classList.add('d-none');
+            const body = {
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+                name: document.getElementById('name').value,
+                phone: document.getElementById('phone').value || null,
+                role: document.getElementById('role').value,
+                businessNumber: document.getElementById('businessNumber').value || null,
+                companyName: document.getElementById('companyName').value || null
+            };
+            const res = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(body)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                window.location.href = '/auth/login';
+                return;
+            }
+            err.textContent = data.error || '가입에 실패했어요.';
+            err.classList.remove('d-none');
+        });
+    </script>
+}

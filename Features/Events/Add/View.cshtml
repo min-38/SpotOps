@@ -1,0 +1,94 @@
+@page "/events/add"
+@model SpotOps.Features.Events.Add.ViewModel
+@{
+    ViewData["Title"] = "공연 등록";
+}
+
+<h2>공연 등록</h2>
+
+<div id="add-error" class="alert alert-danger d-none" role="alert"></div>
+<div id="add-success" class="alert alert-success d-none" role="alert"></div>
+
+<form id="add-event-form">
+    <div class="mb-2">
+        <label class="form-label">공연명</label>
+        <input class="form-control" id="title" name="title" required />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">설명</label>
+        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+    </div>
+    <div class="mb-2">
+        <label class="form-label">티켓 유형</label>
+        <select class="form-select" id="ticketType" name="ticketType">
+            <option value="Seated">좌석 지정</option>
+            <option value="Standing">선착순 입장</option>
+        </select>
+    </div>
+    <div class="mb-2">
+        <label class="form-label">공연 일시</label>
+        <input class="form-control" id="eventAt" name="eventAt" type="datetime-local" required />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">판매 시작</label>
+        <input class="form-control" id="saleStartAt" name="saleStartAt" type="datetime-local" required />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">판매 종료</label>
+        <input class="form-control" id="saleEndAt" name="saleEndAt" type="datetime-local" required />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">총 수용 인원</label>
+        <input class="form-control" id="totalCapacity" name="totalCapacity" type="number" min="1" required />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">가격</label>
+        <input class="form-control" id="price" name="price" type="number" min="0" step="100" required />
+    </div>
+    <div class="mb-2">
+        <label class="form-label">공연장</label>
+        <input class="form-control" id="venueName" name="venueName" required />
+    </div>
+    <button type="submit" class="btn btn-primary">등록하기</button>
+    <a class="btn btn-link" href="/events">목록</a>
+</form>
+
+@section Scripts {
+    <script>
+        document.getElementById('add-event-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const errEl = document.getElementById('add-error');
+            const okEl = document.getElementById('add-success');
+            errEl.classList.add('d-none');
+            okEl.classList.add('d-none');
+
+            const body = {
+                title: document.getElementById('title').value,
+                description: document.getElementById('description').value || null,
+                ticketType: document.getElementById('ticketType').value,
+                eventAt: document.getElementById('eventAt').value,
+                saleStartAt: document.getElementById('saleStartAt').value,
+                saleEndAt: document.getElementById('saleEndAt').value,
+                totalCapacity: parseInt(document.getElementById('totalCapacity').value, 10),
+                price: parseFloat(document.getElementById('price').value),
+                venueName: document.getElementById('venueName').value
+            };
+
+            const res = await fetch('/api/events', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify(body)
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok) {
+                okEl.textContent = '등록되었어요. 목록으로 이동합니다.';
+                okEl.classList.remove('d-none');
+                setTimeout(() => { window.location.href = '/events'; }, 800);
+                return;
+            }
+            errEl.textContent = data.error || '등록에 실패했어요.';
+            errEl.classList.remove('d-none');
+        });
+    </script>
+}

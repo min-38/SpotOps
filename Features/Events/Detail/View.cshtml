@@ -1,0 +1,15 @@
+@page "/events/{id:guid}"
+@model SpotOps.Features.Events.Detail.ViewModel
+@{
+    ViewData["Title"] = Model.Event.Title;
+}
+
+<h2>@Model.Event.Title</h2>
+<p>@Model.Event.Description</p>
+<p>공연장: @Model.Event.VenueName</p>
+<p>일시: @Model.Event.EventAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm")</p>
+<p>가격: @Model.Event.Price.ToString("N0")원</p>
+<p>유형: @(Model.Event.TicketType == SpotOps.Models.TicketType.Seated ? "좌석 지정" : "선착순")</p>
+<p>판매 기간: @Model.Event.SaleStartAt.ToLocalTime().ToString("yyyy.MM.dd") ~ @Model.Event.SaleEndAt.ToLocalTime().ToString("yyyy.MM.dd")</p>
+
+<p class="mt-3"><a href="/events">← 목록</a></p>

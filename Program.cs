@@ -1,19 +1,87 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Http.Json;
+using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.EntityFrameworkCore;
 using SpotOps.Data;
+using SpotOps.Features.Auth.Login;
+using SpotOps.Features.Auth.Register;
+using SpotOps.Features.Events.Add;
+using SpotOps.Features.Events.Detail;
+using SpotOps.Features.Events.List;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddRouting(opt => opt.LowercaseUrls = true);
-builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-    .AddCookie(opt => {
-        opt.LoginPath = "/auth/login";
-        opt.ExpireTimeSpan = TimeSpan.FromDays(7);
-    });
-builder.Services.AddRazorPages();
+builder.Services.Configure<JsonOptions>(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+});
 
-// DB 연결
+builder.Services.AddRouting(options => options.LowercaseUrls = true);
+builder.Services.AddProblemDetails();
+builder.Services.AddAuthorization();
+builder.Services.AddRazorPages(options =>
+{
+    options.RootDirectory = "/Features";
+});
+builder.Services.Configure<RazorViewEngineOptions>(options =>
+{
+    options.PageViewLocationFormats.Add("/Features/Shared/{0}.cshtml");
+});
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.Cookie.Name = "SpotOps.Auth";
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.ExpireTimeSpan = TimeSpan.FromDays(7);
+        options.SlidingExpiration = true;
+        options.Events.OnRedirectToLogin = context =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                return Task.CompletedTask;
+            }
+
+            var returnUrl = Uri.EscapeDataString(context.Request.PathBase + context.Request.Path + context.Request.QueryString);
+            context.Response.Redirect($"/auth/login?returnUrl={returnUrl}");
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            if (context.Request.Path.StartsWithSegments("/api"))
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                return Task.CompletedTask;
+            }
+
+            context.Response.Redirect("/events");
+            return Task.CompletedTask;
+        };
+    });
+
+var corsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("frontend", policy =>
+    {
+        if (corsOrigins.Length == 0)
+            policy.SetIsOriginAllowed(_ => false);
+        else
+            policy.WithOrigins(corsOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+    });
+});
+
+builder.Services.AddScoped<ListEventsService>();
+builder.Services.AddScoped<EventDetailService>();
+builder.Services.AddScoped<AddEventService>();
+builder.Services.AddScoped<LoginService>();
+builder.Services.AddScoped<RegisterService>();
+
 var host = builder.Configuration["DATABASE_HOST"];
 var port = builder.Configuration["DATABASE_PORT"];
 var db = builder.Configuration["DATABASE_NAME"];
@@ -26,19 +94,33 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
-{
-    app.UseExceptionHandler("/Error");
-}
+if (app.Environment.IsDevelopment())
+    app.UseDeveloperExceptionPage();
+else
+    app.UseExceptionHandler();
 
-app.UseRouting();
-
+app.UseStatusCodePages();
+app.UseStaticFiles();
+app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapStaticAssets();
-app.MapRazorPages()
-   .WithStaticAssets();
+app.MapGet("/events/list", () => Results.Redirect("/events", permanent: false))
+    .AllowAnonymous();
+
+app.MapGet("/organizer/create-event", () => Results.Redirect("/events/add", permanent: false))
+    .AllowAnonymous();
+
+app.MapRazorPages();
+
+app.MapGet("/api/health", () => Results.Json(new { status = "ok" }))
+    .WithTags("Health")
+    .AllowAnonymous();
+
+LoginEndpoint.Map(app);
+RegisterEndpoint.Map(app);
+ListEndpoint.Map(app);
+DetailEndpoint.Map(app);
+AddEventEndpoint.Map(app);
 
 app.Run();
