@@ -1,9 +1,16 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using SpotOps.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+builder.Services.AddRouting(opt => opt.LowercaseUrls = true);
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(opt => {
+        opt.LoginPath = "/auth/login";
+        opt.ExpireTimeSpan = TimeSpan.FromDays(7);
+    });
 builder.Services.AddRazorPages();
 
 // DB 연결

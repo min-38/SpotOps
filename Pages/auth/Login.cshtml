@@ -1,0 +1,19 @@
+@page "/auth/login"
+@model SpotOps.Pages.Auth.LoginModel
+
+<h2>로그인</h2>
+
+<form method="post">
+    <span asp-validation-summary="All"></span>
+    <div>
+        <label>이메일</label>
+        <input asp-for="Input.Email" type="email" />
+    </div>
+    <div>
+        <label>비밀번호</label>
+        <input asp-for="Input.Password" type="password" />
+    </div>
+    <button type="submit">로그인</button>
+</form>
+
+<a href="/auth/register">회원가입</a>
