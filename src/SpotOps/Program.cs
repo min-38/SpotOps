@@ -11,6 +11,7 @@ using SpotOps.Features.Events.Add;
 using SpotOps.Features.Events.Detail;
 using SpotOps.Features.Events.List;
 using SpotOps.Features.Events.Reserve;
+using SpotOps.Features.Events.Queue;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -77,12 +78,14 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Service 파일 등록
 builder.Services.AddScoped<ListEventsService>();
 builder.Services.AddScoped<EventDetailService>();
 builder.Services.AddScoped<AddEventService>();
 builder.Services.AddScoped<LoginService>();
 builder.Services.AddScoped<RegisterService>();
 builder.Services.AddScoped<ReserveService>();
+builder.Services.AddSingleton<QueueService>();
 
 var host = builder.Configuration["DATABASE_HOST"];
 var port = builder.Configuration["DATABASE_PORT"];
@@ -119,11 +122,13 @@ app.MapGet("/api/health", () => Results.Json(new { status = "ok" }))
     .WithTags("Health")
     .AllowAnonymous();
 
+// Endpoint 파일 등록
 LoginEndpoint.Map(app);
 RegisterEndpoint.Map(app);
 ListEndpoint.Map(app);
 DetailEndpoint.Map(app);
 AddEventEndpoint.Map(app);
 ReserveEndpoint.Map(app);
+QueueEndpoint.Map(app);
 
 app.Run();
