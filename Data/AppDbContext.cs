@@ -48,6 +48,9 @@ public class AppDbContext : DbContext
             .WithMany(e => e.Seats)
             .HasForeignKey(s => s.EventId);
         mb.Entity<Seat>()
+            .Property(s => s.RowVersion)
+            .IsRowVersion();
+        mb.Entity<Seat>()
             .Property(s => s.Status).HasConversion<string>();
 
         // Reservation

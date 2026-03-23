@@ -10,6 +10,7 @@ using SpotOps.Features.Auth.Register;
 using SpotOps.Features.Events.Add;
 using SpotOps.Features.Events.Detail;
 using SpotOps.Features.Events.List;
+using SpotOps.Features.Events.Reserve;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -81,6 +82,7 @@ builder.Services.AddScoped<EventDetailService>();
 builder.Services.AddScoped<AddEventService>();
 builder.Services.AddScoped<LoginService>();
 builder.Services.AddScoped<RegisterService>();
+builder.Services.AddScoped<ReserveService>();
 
 var host = builder.Configuration["DATABASE_HOST"];
 var port = builder.Configuration["DATABASE_PORT"];
@@ -122,5 +124,6 @@ RegisterEndpoint.Map(app);
 ListEndpoint.Map(app);
 DetailEndpoint.Map(app);
 AddEventEndpoint.Map(app);
+ReserveEndpoint.Map(app);
 
 app.Run();
