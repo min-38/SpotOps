@@ -250,4 +250,38 @@ public class QueueServiceTests
         Assert.NotNull(s2.SessionToken);
         Assert.Null(s3.SessionToken);
     }
+
+    [Fact]
+    public async Task ValidateSelectionSession_WhenInvitedAndTokenMatches_ReturnsTrue()
+    {
+        var service = new QueueService();
+        var eventId = NewEventId();
+        var userId = NewUserId();
+
+        var join = service.Join(eventId, userId);
+        service.InviteNextBatch(eventId, batchSize: 1, selectionWindowSec: 120);
+        var status = service.GetStatus(eventId, join.QueueEntryId);
+
+        Assert.True(status.Invited);
+        Assert.NotNull(status.SessionToken);
+
+        var ok = await service.ValidateSelectionSessionAsync(eventId, userId, status.SessionToken);
+        Assert.True(ok);
+    }
+
+    [Fact]
+    public async Task ValidateSelectionSession_WhenTokenWrong_ReturnsFalse()
+    {
+        var service = new QueueService();
+        var eventId = NewEventId();
+        var userId = NewUserId();
+
+        var join = service.Join(eventId, userId);
+        service.InviteNextBatch(eventId, batchSize: 1, selectionWindowSec: 120);
+        var status = service.GetStatus(eventId, join.QueueEntryId);
+        Assert.True(status.Invited);
+
+        var ok = await service.ValidateSelectionSessionAsync(eventId, userId, "not-the-token");
+        Assert.False(ok);
+    }
 }

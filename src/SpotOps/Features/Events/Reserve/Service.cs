@@ -45,12 +45,25 @@ public sealed class ReserveService
             if (seatId == null)
                 return (null, "좌석을 선택해주세요.");
 
-            var updated = await _db.Seats
-                .Where(s => s.Id == seatId && s.EventId == eventId && s.Status == SeatStatus.Available)
-                .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, SeatStatus.Reserved), cancellationToken);
+            // InMemory provider는 ExecuteUpdateAsync를 지원하지 않아 단위 테스트용으로 분기한다.
+            if (UsesInMemoryProvider(_db))
+            {
+                var seatEntity = await _db.Seats.FirstOrDefaultAsync(
+                    s => s.Id == seatId && s.EventId == eventId,
+                    cancellationToken);
+                if (seatEntity == null || seatEntity.Status != SeatStatus.Available)
+                    return (null, "이미 선택된 좌석이에요.");
+                seatEntity.Status = SeatStatus.Reserved;
+            }
+            else
+            {
+                var updated = await _db.Seats
+                    .Where(s => s.Id == seatId && s.EventId == eventId && s.Status == SeatStatus.Available)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.Status, SeatStatus.Reserved), cancellationToken);
 
-            if (updated == 0)
-                return (null, "이미 선택된 좌석이에요.");
+                if (updated == 0)
+                    return (null, "이미 선택된 좌석이에요.");
+            }
         }
         else
         {
@@ -112,4 +125,7 @@ public sealed class ReserveService
 
         return new ReserveResponseDto(reservation.Id, reservation.ExpiresAt);
     }
+
+    private static bool UsesInMemoryProvider(AppDbContext db) =>
+        db.Database.ProviderName?.Contains("InMemory", StringComparison.OrdinalIgnoreCase) == true;
 }

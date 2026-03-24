@@ -19,6 +19,7 @@ using SpotOps.Features.Events.Detail;
 using SpotOps.Features.Events.List;
 using SpotOps.Features.Events.Reserve;
 using SpotOps.Features.Events.Queue;
+using SpotOps.Features.Events.Selection;
 
 // Infrastructure
 using SpotOps.Infrastructure.Redis;
@@ -96,6 +97,7 @@ builder.Services.AddScoped<AddEventService>();
 builder.Services.AddScoped<LoginService>();
 builder.Services.AddScoped<RegisterService>();
 builder.Services.AddScoped<ReserveService>();
+builder.Services.AddScoped<SelectionService>();
 builder.Services.AddSingleton<QueueService>();
 
 // Redis 연결 (singleton으로 등록하여 애플리케이션 전체에서 공유)
@@ -179,5 +181,6 @@ DetailEndpoint.Map(app);
 AddEventEndpoint.Map(app);
 ReserveEndpoint.Map(app);
 QueueEndpoint.Map(app);
+SelectionEndpoint.Map(app);
 
 app.Run();

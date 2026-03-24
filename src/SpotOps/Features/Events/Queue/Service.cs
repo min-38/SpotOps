@@ -207,6 +207,35 @@ public sealed class QueueService
         });
     }
 
+    // Invited 상태이고 세션 토큰이 일치하며 아직 만료되지 않았는지 확인한다.
+    public Task<bool> ValidateSelectionSessionAsync(
+        Guid eventId,
+        Guid userId,
+        string? sessionToken,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (string.IsNullOrWhiteSpace(sessionToken))
+            return Task.FromResult(false);
+
+        var now = DateTime.UtcNow;
+
+        if (_store is null)
+        {
+            if (!_queues.TryGetValue(eventId, out var queue))
+                return Task.FromResult(false);
+
+            lock (queue)
+            {
+                ExpireInvitedEntries(queue, now);
+                return Task.FromResult(MatchesInvitedSession(queue, userId, sessionToken, now));
+            }
+        }
+
+        return ValidateSelectionSessionRedisAsync(eventId, userId, sessionToken, cancellationToken);
+    }
+
     // 다음 배치 초대
     public async Task<int> InviteNextBatchAsync(Guid eventId, int batchSize, int selectionWindowSec)
     {
@@ -272,6 +301,34 @@ public sealed class QueueService
     }
 
     private string GetQueueKey(Guid eventId) => _keys.QueueEvent(eventId);
+
+    private static bool MatchesInvitedSession(List<QueueState> queue, Guid userId, string sessionToken, DateTime nowUtc)
+    {
+        return queue.Any(x =>
+            x.UserId == userId
+            && x.Status == QueueEntryStatus.Invited
+            && string.Equals(x.SessionToken, sessionToken, StringComparison.Ordinal)
+            && x.SessionExpiresAtUtc > nowUtc);
+    }
+
+    private async Task<bool> ValidateSelectionSessionRedisAsync(
+        Guid eventId,
+        Guid userId,
+        string sessionToken,
+        CancellationToken cancellationToken)
+    {
+        return await WithEventLockAsync(eventId, async () =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var queueKey = GetQueueKey(eventId);
+            var queue = await _store!.GetAsync(queueKey) ?? [];
+            var now = DateTime.UtcNow;
+            ExpireInvitedEntries(queue, now);
+            var ok = MatchesInvitedSession(queue, userId, sessionToken, now);
+            await _store.SetAsync(queueKey, queue);
+            return ok;
+        });
+    }
 
     private async Task<T> WithEventLockAsync<T>(Guid eventId, Func<Task<T>> action)
     {
