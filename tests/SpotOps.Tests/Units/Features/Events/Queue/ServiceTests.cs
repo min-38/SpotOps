@@ -202,4 +202,52 @@ public class QueueServiceTests
         Assert.Equal(1, waitingSecond.Position);
         Assert.Equal(0, waitingSecond.WaitingAhead);
     }
+
+    // 성공: async 경로도 sync와 동일하게 순번을 부여한다.
+    [Fact]
+    public async Task JoinAsync_MultipleUsers_AssignsIncreasingPositions()
+    {
+        // Arrange
+        var service = new QueueService();
+        var eventId = NewEventId();
+
+        // Act
+        var r1 = await service.JoinAsync(eventId, NewUserId());
+        var r2 = await service.JoinAsync(eventId, NewUserId());
+        var r3 = await service.JoinAsync(eventId, NewUserId());
+
+        // Assert
+        Assert.Equal(1, r1.Position);
+        Assert.Equal(2, r2.Position);
+        Assert.Equal(3, r3.Position);
+    }
+
+    // 성공: async 경로에서 배치 초대/상태 조회가 sync와 동일하게 동작한다.
+    [Fact]
+    public async Task InviteNextBatchAsync_AndGetStatusAsync_MatchSyncBehavior()
+    {
+        // Arrange
+        var service = new QueueService();
+        var eventId = NewEventId();
+
+        var e1 = await service.JoinAsync(eventId, NewUserId());
+        var e2 = await service.JoinAsync(eventId, NewUserId());
+        var e3 = await service.JoinAsync(eventId, NewUserId());
+
+        // Act
+        var invited = await service.InviteNextBatchAsync(eventId, batchSize: 2, selectionWindowSec: 180);
+        var s1 = await service.GetStatusAsync(eventId, e1.QueueEntryId);
+        var s2 = await service.GetStatusAsync(eventId, e2.QueueEntryId);
+        var s3 = await service.GetStatusAsync(eventId, e3.QueueEntryId);
+
+        // Assert
+        Assert.Equal(2, invited);
+        Assert.True(s1.Invited);
+        Assert.True(s2.Invited);
+        Assert.False(s3.Invited);
+        Assert.Equal(QueueEntryStatus.Waiting, s3.Status);
+        Assert.NotNull(s1.SessionToken);
+        Assert.NotNull(s2.SessionToken);
+        Assert.Null(s3.SessionToken);
+    }
 }

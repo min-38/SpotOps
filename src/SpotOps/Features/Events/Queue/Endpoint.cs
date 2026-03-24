@@ -17,7 +17,8 @@ public static class QueueEndpoint
         group.MapPost("/invite-next", InviteNextBatchAsync);
     }
 
-    private static IResult JoinAsync(
+    // Task<IResult>: Results.Ok(), Results.BadRequest(), Results.Unauthorized() 등 다양한 HTTP 응답을 반환할 수 있도록 하는 반환 타입
+    private static async Task<IResult> JoinAsync(
         Guid eventId,
         QueueService queue,
         ClaimsPrincipal user)
@@ -26,18 +27,18 @@ public static class QueueEndpoint
         if (!Guid.TryParse(userIdClaim, out var userId))
             return Results.Unauthorized();
 
-        var res = queue.Join(eventId, userId);
+        var res = await queue.JoinAsync(eventId, userId);
         return Results.Json(res);
     }
 
-    private static IResult GetStatusAsync(
+    private static async Task<IResult> GetStatusAsync(
         Guid eventId,
         Guid queueEntryId,
         QueueService queue)
     {
         try
         {
-            var res = queue.GetStatus(eventId, queueEntryId);
+            var res = await queue.GetStatusAsync(eventId, queueEntryId);
             return Results.Json(res);
         }
         catch (InvalidOperationException ex)
@@ -48,7 +49,7 @@ public static class QueueEndpoint
 
     private sealed record InviteNextRequest(int BatchSize, int SelectionWindowSec);
 
-    private static IResult InviteNextBatchAsync(
+    private static async Task<IResult> InviteNextBatchAsync(
         Guid eventId,
         InviteNextRequest body,
         QueueService queue)
@@ -56,7 +57,7 @@ public static class QueueEndpoint
         if (body.BatchSize <= 0 || body.SelectionWindowSec <= 0)
             return Results.BadRequest(new { error = "BatchSize and SelectionWindowSec must be positive." });
 
-        var invited = queue.InviteNextBatch(eventId, body.BatchSize, body.SelectionWindowSec);
+        var invited = await queue.InviteNextBatchAsync(eventId, body.BatchSize, body.SelectionWindowSec);
         return Results.Json(new { invited });
     }
 }

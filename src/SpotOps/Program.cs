@@ -1,10 +1,17 @@
+// System
 using System.Text.Json;
 using System.Text.Json.Serialization;
+
+// Microsoft Extensions
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.EntityFrameworkCore;
+
+// Data
 using SpotOps.Data;
+
+// Features
 using SpotOps.Features.Auth.Login;
 using SpotOps.Features.Auth.Register;
 using SpotOps.Features.Events.Add;
@@ -12,6 +19,10 @@ using SpotOps.Features.Events.Detail;
 using SpotOps.Features.Events.List;
 using SpotOps.Features.Events.Reserve;
 using SpotOps.Features.Events.Queue;
+
+// Infrastructure
+using SpotOps.Infrastructure.Redis;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -86,6 +97,44 @@ builder.Services.AddScoped<LoginService>();
 builder.Services.AddScoped<RegisterService>();
 builder.Services.AddScoped<ReserveService>();
 builder.Services.AddSingleton<QueueService>();
+
+// Redis 연결 (singleton으로 등록하여 애플리케이션 전체에서 공유)
+// RedisOptions 등록
+builder.Services.AddSingleton(_ =>
+{
+    var c = builder.Configuration;
+    return new RedisOptions
+    {
+        Host = c["REDIS_HOST"] ?? "localhost",
+        Port = c.GetValue("REDIS_PORT", 6379),
+        Password = c["REDIS_PASSWORD"] ?? "",
+        Db = c.GetValue("REDIS_DB", 0),
+        KeyPrefix = c["REDIS_KEY_PREFIX"] ?? "spotops",
+        DefaultTtlHours = c.GetValue("REDIS_DEFAULT_TTL_HOURS", 24)
+    };
+});
+
+builder.Services.AddSingleton(sp =>
+{
+    var redis = sp.GetRequiredService<RedisOptions>();
+    return new RedisKeyBuilder(redis.KeyPrefix);
+});
+
+// IConnectionMultiplexer 등록 (Options 사용)
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+{
+    var redis = sp.GetRequiredService<RedisOptions>();
+    var options = new ConfigurationOptions
+    {
+        AbortOnConnectFail = false,
+        DefaultDatabase = redis.Db,
+        ConnectTimeout = 5000
+    };
+    options.EndPoints.Add(redis.Host, redis.Port);
+    if (!string.IsNullOrWhiteSpace(redis.Password))
+        options.Password = redis.Password;
+    return ConnectionMultiplexer.Connect(options);
+});
 
 var host = builder.Configuration["DATABASE_HOST"];
 var port = builder.Configuration["DATABASE_PORT"];
