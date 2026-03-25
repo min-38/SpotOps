@@ -86,6 +86,9 @@ public class AppDbContext : DbContext
             .Property(p => p.Amount).HasColumnType("numeric(10,2)");
         mb.Entity<Payment>()
             .Property(p => p.Status).HasConversion<string>();
+        mb.Entity<Payment>()
+            .HasIndex(p => p.PortOnePaymentId)
+            .IsUnique();
 
         // QueueEntry
         mb.Entity<QueueEntry>()

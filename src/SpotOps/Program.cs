@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 // Microsoft Extensions
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Mvc.Razor;
@@ -20,8 +21,10 @@ using SpotOps.Features.Events.List;
 using SpotOps.Features.Events.Reserve;
 using SpotOps.Features.Events.Queue;
 using SpotOps.Features.Events.Selection;
+using SpotOps.Features.Payments;
 
 // Infrastructure
+using SpotOps.Infrastructure.PortOne;
 using SpotOps.Infrastructure.Redis;
 using StackExchange.Redis;
 
@@ -98,7 +101,25 @@ builder.Services.AddScoped<LoginService>();
 builder.Services.AddScoped<RegisterService>();
 builder.Services.AddScoped<ReserveService>();
 builder.Services.AddScoped<SelectionService>();
+builder.Services.AddScoped<PaymentService>();
 builder.Services.AddSingleton<QueueService>();
+
+builder.Services.AddOptions<PortOneOptions>()
+    .Configure<IConfiguration>((o, c) =>
+    {
+        o.ApiSecret = c["PortOne:ApiSecret"] ?? c["PORTONE_SECRET"] ?? "";
+        o.StoreId = c["PortOne:StoreId"] ?? c["PORTONE_STORE_ID"] ?? c["PORTONE_MID"] ?? "";
+        o.WebhookSecret = c["PortOne:WebhookSecret"] ?? c["PORTONE_WEBHOOK_SECRET"] ?? "";
+        o.ApiBaseUrl = c["PortOne:ApiBaseUrl"] ?? c["PORTONE_API_BASE_URL"] ?? "https://api.portone.io";
+    });
+
+builder.Services.AddHttpClient("PortOne", (sp, client) =>
+{
+    var opt = sp.GetRequiredService<IOptions<PortOneOptions>>().Value;
+    client.BaseAddress = new Uri(opt.ApiBaseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddSingleton<IPortOnePaymentApi, PortOnePaymentApiClient>();
 
 // Redis 연결 (singleton으로 등록하여 애플리케이션 전체에서 공유)
 // RedisOptions 등록
@@ -182,5 +203,6 @@ AddEventEndpoint.Map(app);
 ReserveEndpoint.Map(app);
 QueueEndpoint.Map(app);
 SelectionEndpoint.Map(app);
+PaymentEndpoint.Map(app);
 
 app.Run();
