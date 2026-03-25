@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using System.Text;
+using SpotOps.Contracts;
 
 namespace SpotOps.Features.Payments;
 
@@ -25,13 +26,17 @@ public static class PaymentEndpoint
         CancellationToken cancellationToken)
     {
         if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-            return Results.Unauthorized();
+            return Results.Json(
+                ApiResponse<object?>.Fail("AUTH_UNAUTHORIZED", "Unauthorized."),
+                statusCode: StatusCodes.Status401Unauthorized);
 
         var (response, error) = await payments.PrepareAsync(userId, reservationId, cancellationToken);
         if (error is not null)
-            return Results.BadRequest(new { error });
+            return Results.Json(
+                ApiResponse<object?>.Fail("PAYMENT_PREPARE_FAILED", error),
+                statusCode: StatusCodes.Status400BadRequest);
 
-        return Results.Json(response);
+        return Results.Json(ApiResponse<PaymentPrepareResponse>.Ok(response));
     }
 
     /// <summary>

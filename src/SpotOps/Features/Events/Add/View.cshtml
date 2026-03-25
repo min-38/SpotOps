@@ -87,7 +87,13 @@
                 setTimeout(() => { window.location.href = '/events'; }, 800);
                 return;
             }
-            errEl.textContent = data.error || '등록에 실패했어요.';
+            const byCode = {
+                AUTH_UNAUTHORIZED: '로그인이 필요해요.',
+                AUTH_ORGANIZER_PROFILE_MISSING: '주최자 프로필이 없습니다.'
+            };
+            const apiErr = data.error;
+            const msg = (apiErr && byCode[apiErr.code]) || (apiErr && apiErr.message) || '등록에 실패했어요.';
+            errEl.textContent = msg;
             errEl.classList.remove('d-none');
         });
     </script>

@@ -44,7 +44,12 @@
                 window.location.href = next;
                 return;
             }
-            err.textContent = data.error || '로그인에 실패했어요.';
+            const byCode = {
+                AUTH_INVALID_CREDENTIALS: '이메일 또는 비밀번호가 올바르지 않아요.'
+            };
+            const apiErr = data.error;
+            const msg = (apiErr && byCode[apiErr.code]) || (apiErr && apiErr.message) || '로그인에 실패했어요.';
+            err.textContent = msg;
             err.classList.remove('d-none');
         });
     </script>

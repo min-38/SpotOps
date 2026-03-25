@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
+using SpotOps.Contracts;
+
 namespace SpotOps.Features.Auth.Login;
 
 public static class LoginEndpoint
@@ -14,26 +16,22 @@ public static class LoginEndpoint
             {
                 var (user, error) = await login.ValidateAsync(body, cancellationToken);
                 if (error is not null || user is null)
-                    return Results.Json(new LoginApiResponse(false, null, error), statusCode: StatusCodes.Status401Unauthorized);
+                    return Results.Json(
+                        ApiResponse<LoginUserDto>.Fail("AUTH_INVALID_CREDENTIALS", error),
+                        statusCode: StatusCodes.Status401Unauthorized);
 
                 await http.SignInAsync(
                     CookieAuthenticationDefaults.AuthenticationScheme,
                     login.CreatePrincipal(user));
 
-                return Results.Json(new LoginApiResponse(
-                    true,
-                    new UserApiResponse(user.Id, user.Email, user.Name, user.Role.ToString()),
-                    null));
+                var payload = new LoginUserDto(user.Id, user.Email, user.Name, user.Role.ToString());
+                return Results.Json(ApiResponse<LoginUserDto>.Ok(payload));
             }).AllowAnonymous();
 
         group.MapPost("/logout", async (HttpContext http) =>
         {
             await http.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return Results.Json(new { success = true });
+            return Results.Json(ApiResponse<object?>.Ok(null));
         }).RequireAuthorization();
     }
-
-    private sealed record LoginApiResponse(bool Success, UserApiResponse? User, string? Error);
-
-    private sealed record UserApiResponse(Guid Id, string Email, string Name, string Role);
 }

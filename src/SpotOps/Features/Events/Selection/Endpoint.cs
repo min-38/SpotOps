@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using SpotOps.Contracts;
 
 namespace SpotOps.Features.Events.Selection;
 
@@ -25,14 +26,18 @@ public static class SelectionEndpoint
         CancellationToken cancellationToken)
     {
         if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-            return Results.Unauthorized();
+            return Results.Json(
+                ApiResponse<object?>.Fail("AUTH_UNAUTHORIZED", "Unauthorized."),
+                statusCode: StatusCodes.Status401Unauthorized);
 
         var token = request.Headers[QueueSessionHeaderName].FirstOrDefault();
         var (layout, error) = await selection.GetLayoutAsync(eventId, userId, token, cancellationToken);
         if (error is not null)
-            return Results.Json(new { error }, statusCode: StatusCodes.Status403Forbidden);
+            return Results.Json(
+                ApiResponse<object?>.Fail("SELECTION_LAYOUT_FAILED", error),
+                statusCode: StatusCodes.Status403Forbidden);
 
-        return Results.Json(layout);
+        return Results.Json(ApiResponse<SelectionLayoutResponse>.Ok(layout));
     }
 
     private static async Task<IResult> HoldAsync(
@@ -44,14 +49,19 @@ public static class SelectionEndpoint
         CancellationToken cancellationToken)
     {
         if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-            return Results.Unauthorized();
+            return Results.Json(
+                ApiResponse<object?>.Fail("AUTH_UNAUTHORIZED", "Unauthorized."),
+                statusCode: StatusCodes.Status401Unauthorized);
 
         var token = request.Headers[QueueSessionHeaderName].FirstOrDefault();
         var (reservation, error) = await selection.HoldAsync(eventId, userId, token, body.SeatId, cancellationToken);
         if (error is not null)
-            return Results.BadRequest(new { error });
+            return Results.Json(
+                ApiResponse<object?>.Fail("SELECTION_HOLD_FAILED", error),
+                statusCode: StatusCodes.Status400BadRequest);
 
-        return Results.Json(new { reservationId = reservation!.Id, expiresAt = reservation.ExpiresAt });
+        return Results.Json(
+            ApiResponse<object?>.Ok(new { reservationId = reservation!.Id, expiresAt = reservation!.ExpiresAt }));
     }
 
     private static async Task<IResult> ReleaseAsync(
@@ -63,13 +73,17 @@ public static class SelectionEndpoint
         CancellationToken cancellationToken)
     {
         if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
-            return Results.Unauthorized();
+            return Results.Json(
+                ApiResponse<object?>.Fail("AUTH_UNAUTHORIZED", "Unauthorized."),
+                statusCode: StatusCodes.Status401Unauthorized);
 
         var token = request.Headers[QueueSessionHeaderName].FirstOrDefault();
         var (ok, error) = await selection.ReleaseAsync(eventId, userId, token, body.SeatId, cancellationToken);
         if (!ok)
-            return Results.BadRequest(new { error });
+            return Results.Json(
+                ApiResponse<object?>.Fail("SELECTION_RELEASE_FAILED", error),
+                statusCode: StatusCodes.Status400BadRequest);
 
-        return Results.Json(new { released = true });
+        return Results.Json(ApiResponse<object?>.Ok(new { released = true }));
     }
 }

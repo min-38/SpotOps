@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using SpotOps.Contracts;
 
 namespace SpotOps.Features.Events.Queue;
 
@@ -25,10 +26,12 @@ public static class QueueEndpoint
     {
         var userIdClaim = user.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(userIdClaim, out var userId))
-            return Results.Unauthorized();
+            return Results.Json(
+                ApiResponse<object?>.Fail("AUTH_UNAUTHORIZED", "Unauthorized."),
+                statusCode: StatusCodes.Status401Unauthorized);
 
         var res = await queue.JoinAsync(eventId, userId);
-        return Results.Json(res);
+        return Results.Json(ApiResponse<QueueJoinResponse>.Ok(res));
     }
 
     private static async Task<IResult> GetStatusAsync(
@@ -39,11 +42,13 @@ public static class QueueEndpoint
         try
         {
             var res = await queue.GetStatusAsync(eventId, queueEntryId);
-            return Results.Json(res);
+            return Results.Json(ApiResponse<QueueStatusResponse>.Ok(res));
         }
         catch (InvalidOperationException ex)
         {
-            return Results.NotFound(new { error = ex.Message });
+            return Results.Json(
+                ApiResponse<object?>.Fail("QUEUE_NOT_FOUND", ex.Message),
+                statusCode: StatusCodes.Status404NotFound);
         }
     }
 
@@ -55,9 +60,13 @@ public static class QueueEndpoint
         QueueService queue)
     {
         if (body.BatchSize <= 0 || body.SelectionWindowSec <= 0)
-            return Results.BadRequest(new { error = "BatchSize and SelectionWindowSec must be positive." });
+            return Results.Json(
+                ApiResponse<object?>.Fail(
+                    "INVITE_NEXT_INVALID_REQUEST",
+                    "BatchSize and SelectionWindowSec must be positive."),
+                statusCode: StatusCodes.Status400BadRequest);
 
         var invited = await queue.InviteNextBatchAsync(eventId, body.BatchSize, body.SelectionWindowSec);
-        return Results.Json(new { invited });
+        return Results.Json(ApiResponse<int>.Ok(invited));
     }
 }

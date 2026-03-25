@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using SpotOps.Models;
+using SpotOps.Contracts;
 using System.Security.Claims;
 
 namespace SpotOps.Features.Events.Reserve;
@@ -28,9 +29,12 @@ public static class ReserveEndpoint
         var (reservation, error) = await service.ReserveAsync(eventId, userId, dto.SeatId, cancellationToken);
 
         if (error is not null)
-            return Results.BadRequest(new { error });
+            return Results.Json(
+                ApiResponse<object?>.Fail("RESERVE_FAILED", error),
+                statusCode: StatusCodes.Status400BadRequest);
 
-        return Results.Ok(new ReserveResponseDto(reservation!.Id, reservation.ExpiresAt));
+        var payload = new ReserveResponseDto(reservation!.Id, reservation.ExpiresAt);
+        return Results.Json(ApiResponse<ReserveResponseDto>.Ok(payload));
     }
 
     private static async Task<IResult> CancelAsync(
@@ -44,7 +48,10 @@ public static class ReserveEndpoint
 
         var success = await service.CancelAsync(reservationId, userId, cancellationToken);
 
-        return success ? Results.Ok() : Results.BadRequest(new { error = "취소할 수 없어요." });
+        return success
+            ? Results.Json(ApiResponse<object?>.Ok(null))
+            : Results.Json(ApiResponse<object?>.Fail("RESERVATION_CANCEL_FAILED", "취소할 수 없어요."),
+                statusCode: StatusCodes.Status400BadRequest);
     }
 
     private static async Task<IResult> GetStatusAsync(
@@ -58,7 +65,7 @@ public static class ReserveEndpoint
         var reservation = await service.GetStatusAsync(eventId, userId, cancellationToken);
 
         return reservation is null
-            ? Results.NotFound()
-            : Results.Ok(reservation);
+            ? Results.Json(ApiResponse<object?>.Fail("RESERVATION_NOT_FOUND"), statusCode: StatusCodes.Status404NotFound)
+            : Results.Json(ApiResponse<ReserveResponseDto>.Ok(reservation));
     }
 }

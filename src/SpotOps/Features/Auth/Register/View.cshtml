@@ -77,7 +77,12 @@
                 window.location.href = '/auth/login';
                 return;
             }
-            err.textContent = data.error || '가입에 실패했어요.';
+            const byCode = {
+                AUTH_EMAIL_ALREADY_EXISTS: '이미 사용 중인 이메일이에요.'
+            };
+            const apiErr = data.error;
+            const msg = (apiErr && byCode[apiErr.code]) || (apiErr && apiErr.message) || '가입에 실패했어요.';
+            err.textContent = msg;
             err.classList.remove('d-none');
         });
     </script>

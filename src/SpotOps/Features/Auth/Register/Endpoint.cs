@@ -1,3 +1,5 @@
+using SpotOps.Contracts;
+
 namespace SpotOps.Features.Auth.Register;
 
 public static class RegisterEndpoint
@@ -15,8 +17,10 @@ public static class RegisterEndpoint
     {
         var (success, emailError) = await register.RegisterAsync(body, cancellationToken);
         if (!success)
-            return Results.Json(new { success = false, error = emailError }, statusCode: StatusCodes.Status400BadRequest);
+            return Results.Json(
+                ApiResponse<object?>.Fail("AUTH_EMAIL_ALREADY_EXISTS", emailError),
+                statusCode: StatusCodes.Status400BadRequest);
 
-        return Results.Json(new { success = true }, statusCode: StatusCodes.Status201Created);
+        return Results.Json(ApiResponse<object?>.Ok(null), statusCode: StatusCodes.Status201Created);
     }
 }
