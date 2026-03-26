@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using SpotOps.Contracts;
+using SpotOps.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace SpotOps.Features.Events.Queue;
 
@@ -21,6 +23,7 @@ public static class QueueEndpoint
     // Task<IResult>: Results.Ok(), Results.BadRequest(), Results.Unauthorized() 등 다양한 HTTP 응답을 반환할 수 있도록 하는 반환 타입
     private static async Task<IResult> JoinAsync(
         Guid eventId,
+        AppDbContext db,
         QueueService queue,
         ClaimsPrincipal user)
     {
@@ -29,6 +32,14 @@ public static class QueueEndpoint
             return Results.Json(
                 ApiResponse<object?>.Fail("AUTH_UNAUTHORIZED", "Unauthorized."),
                 statusCode: StatusCodes.Status401Unauthorized);
+
+        var isPhoneVerified = await db.Users
+            .AsNoTracking()
+            .AnyAsync(u => u.Id == userId && u.PhoneVerifiedAt != null);
+        if (!isPhoneVerified)
+            return Results.Json(
+                ApiResponse<object?>.Fail("PHONE_VERIFICATION_REQUIRED", "휴대폰 인증 후 순서권을 발급할 수 있어요."),
+                statusCode: StatusCodes.Status403Forbidden);
 
         try
         {

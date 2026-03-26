@@ -22,10 +22,13 @@ using SpotOps.Features.Events.Reserve;
 using SpotOps.Features.Events.Queue;
 using SpotOps.Features.Events.Selection;
 using SpotOps.Features.Payments;
+using SpotOps.Features.Me.Reservations;
+using SpotOps.Features.Me.Profile;
 
 // Infrastructure
 using SpotOps.Infrastructure.PortOne;
 using SpotOps.Infrastructure.Redis;
+using SpotOps.Infrastructure.Sms;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -112,6 +115,10 @@ builder.Services.AddScoped<ReserveService>();
 builder.Services.AddScoped<SelectionService>();
 builder.Services.AddScoped<PaymentService>();
 builder.Services.AddSingleton<QueueService>();
+builder.Services.AddScoped<MyReservationsService>();
+builder.Services.AddScoped<MyProfileService>();
+builder.Services.AddScoped<PhoneVerificationService>();
+builder.Services.AddSingleton<ISmsSender, LoggingSmsSender>();
 
 builder.Services.AddOptions<PortOneOptions>()
     .Configure<IConfiguration>((o, c) =>
@@ -223,5 +230,7 @@ ReserveEndpoint.Map(app);
 QueueEndpoint.Map(app);
 SelectionEndpoint.Map(app);
 PaymentEndpoint.Map(app);
+MyReservationsEndpoint.Map(app);
+MyProfileEndpoint.Map(app);
 
 app.Run();

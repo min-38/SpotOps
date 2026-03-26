@@ -16,6 +16,7 @@ public class User
     public string Name { get; set; } = "";
 
     public string? Phone { get; set; }
+    public DateTime? PhoneVerifiedAt { get; set; }
 
     public UserRole Role { get; set; } = UserRole.Buyer;
 
