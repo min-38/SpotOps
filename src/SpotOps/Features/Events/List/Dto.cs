@@ -1,3 +1,4 @@
+using SpotOps.Features.Events;
 using SpotOps.Models;
 
 namespace SpotOps.Features.Events.ListEvents;
@@ -8,4 +9,5 @@ public sealed record EventListRowDto(
     string VenueName,
     DateTime EventAt,
     decimal Price,
-    TicketType TicketType);
+    TicketType TicketType,
+    EventSaleStatus SaleStatus);

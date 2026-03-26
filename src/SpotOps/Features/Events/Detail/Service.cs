@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SpotOps.Data;
+using SpotOps.Features.Events;
 
 namespace SpotOps.Features.Events.Detail;
 
@@ -30,6 +31,7 @@ public sealed class EventDetailService
             e.Price,
             e.TicketType,
             e.SaleStartAt,
-            e.SaleEndAt);
+            e.SaleEndAt,
+            EventSaleStatusResolver.Resolve(e.SaleStartAt, e.SaleEndAt, DateTime.UtcNow));
     }
 }

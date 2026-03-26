@@ -1,4 +1,5 @@
 using SpotOps.Data;
+using SpotOps.Features.Events;
 using SpotOps.Features.Events.ListEvents;
 
 namespace SpotOps.Features.Events.List;
@@ -14,10 +15,17 @@ public sealed class ListEventsService
 
     public IReadOnlyList<EventListRowDto> ListActive()
     {
+        var now = DateTime.UtcNow;
         return _db.Events
-            .Where(e => e.SaleEndAt > DateTime.UtcNow)
             .OrderBy(e => e.EventAt)
-            .Select(e => new EventListRowDto(e.Id, e.Title, e.VenueName, e.EventAt, e.Price, e.TicketType))
+            .Select(e => new EventListRowDto(
+                e.Id,
+                e.Title,
+                e.VenueName,
+                e.EventAt,
+                e.Price,
+                e.TicketType,
+                EventSaleStatusResolver.Resolve(e.SaleStartAt, e.SaleEndAt, now)))
             .ToList();
     }
 }

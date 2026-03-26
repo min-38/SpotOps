@@ -1,3 +1,4 @@
+using SpotOps.Features.Events;
 using SpotOps.Models;
 
 namespace SpotOps.Features.Events.Detail;
@@ -11,4 +12,5 @@ public sealed record EventDetailDto(
     decimal Price,
     TicketType TicketType,
     DateTime SaleStartAt,
-    DateTime SaleEndAt);
+    DateTime SaleEndAt,
+    EventSaleStatus SaleStatus);
