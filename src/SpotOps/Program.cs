@@ -15,6 +15,7 @@ using SpotOps.Data;
 // Features
 using SpotOps.Features.Auth.Login;
 using SpotOps.Features.Auth.Register;
+using SpotOps.Features.Auth.PasswordReset;
 using SpotOps.Features.Events.Add;
 using SpotOps.Features.Events.Detail;
 using SpotOps.Features.Events.List;
@@ -29,6 +30,7 @@ using SpotOps.Features.Me.Profile;
 using SpotOps.Infrastructure.PortOne;
 using SpotOps.Infrastructure.Redis;
 using SpotOps.Infrastructure.Sms;
+using SpotOps.Infrastructure.Email;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -111,6 +113,7 @@ builder.Services.AddScoped<EventDetailService>();
 builder.Services.AddScoped<AddEventService>();
 builder.Services.AddScoped<LoginService>();
 builder.Services.AddScoped<RegisterService>();
+builder.Services.AddScoped<PasswordResetService>();
 builder.Services.AddScoped<ReserveService>();
 builder.Services.AddScoped<SelectionService>();
 builder.Services.AddScoped<PaymentService>();
@@ -119,6 +122,21 @@ builder.Services.AddScoped<MyReservationsService>();
 builder.Services.AddScoped<MyProfileService>();
 builder.Services.AddScoped<PhoneVerificationService>();
 builder.Services.AddSingleton<ISmsSender, LoggingSmsSender>();
+builder.Services.AddSingleton(sp =>
+{
+    var c = builder.Configuration;
+    return new SmtpOptions
+    {
+        Host = c["SMTP_HOST"] ?? "localhost",
+        Port = int.TryParse(c["SMTP_PORT"], out var p) ? p : 587,
+        FromEmail = c["SMTP_FROM_EMAIL"] ?? "noreply@example.com",
+        FromName = c["SMTP_FROM_NAME"] ?? "SpotOps",
+        Username = c["SMTP_USERNAME"],
+        Password = c["SMTP_PASSWORD"],
+        EnableSsl = bool.TryParse(c["SMTP_ENABLE_SSL"], out var ssl) && ssl
+    };
+});
+builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
 builder.Services.AddOptions<PortOneOptions>()
     .Configure<IConfiguration>((o, c) =>
@@ -223,6 +241,7 @@ app.MapGet("/api/health", () => Results.Json(new { status = "ok" }))
 // Endpoint 파일 등록
 LoginEndpoint.Map(app);
 RegisterEndpoint.Map(app);
+PasswordResetEndpoint.Map(app);
 ListEndpoint.Map(app);
 DetailEndpoint.Map(app);
 AddEventEndpoint.Map(app);

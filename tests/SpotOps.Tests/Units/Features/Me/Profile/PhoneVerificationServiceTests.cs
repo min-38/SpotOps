@@ -75,5 +75,24 @@ public sealed class PhoneVerificationServiceTests
         Assert.False(ok);
         Assert.Equal("PHONE_OTP_MISMATCH", code);
     }
+
+    [Fact]
+    public async Task SendOtp_ImmediateSecondRequest_ReturnsRateLimited()
+    {
+        await using var db = CreateDb();
+        var user = new User { Email = "u2@test.com", PasswordHash = "x", Name = "U2" };
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var sms = new CaptureSmsSender();
+        var svc = new PhoneVerificationService(db, sms, NullLogger<PhoneVerificationService>.Instance);
+
+        var (ok1, _, _) = await svc.SendOtpAsync(user.Id, "01012345678");
+        var (ok2, code2, _) = await svc.SendOtpAsync(user.Id, "01012345678");
+
+        Assert.True(ok1);
+        Assert.False(ok2);
+        Assert.Equal("PHONE_OTP_RATE_LIMITED", code2);
+    }
 }
 

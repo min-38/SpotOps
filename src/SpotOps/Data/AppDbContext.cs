@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<QueueEntry> QueueEntries => Set<QueueEntry>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -103,5 +104,14 @@ public class AppDbContext : DbContext
             .Property(q => q.Status).HasConversion<string>();
         mb.Entity<QueueEntry>()
             .HasIndex(q => new { q.EventId, q.UserId }).IsUnique();
+
+        // PasswordResetToken
+        mb.Entity<PasswordResetToken>()
+            .HasOne(t => t.User)
+            .WithMany()
+            .HasForeignKey(t => t.UserId);
+        mb.Entity<PasswordResetToken>()
+            .HasIndex(t => t.TokenHash)
+            .IsUnique();
     }
 }

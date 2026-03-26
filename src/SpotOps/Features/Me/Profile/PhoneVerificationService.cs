@@ -11,8 +11,12 @@ public sealed class PhoneVerificationService
     private sealed record OtpSession(string Phone, string Code, DateTime ExpiresAtUtc, int FailedAttempts);
 
     private static readonly TimeSpan OtpTtl = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan SendCooldown = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan SendWindow = TimeSpan.FromHours(1);
+    private const int MaxSendsPerWindow = 5;
     private const int MaxAttempts = 5;
-    private readonly ConcurrentDictionary<Guid, OtpSession> _sessions = new();
+    private static readonly ConcurrentDictionary<Guid, OtpSession> _sessions = new();
+    private static readonly ConcurrentDictionary<Guid, List<DateTime>> _sendHistories = new();
 
     private readonly AppDbContext _db;
     private readonly ISmsSender _smsSender;
@@ -37,6 +41,10 @@ public sealed class PhoneVerificationService
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
         if (user is null)
             return (false, "ME_PROFILE_NOT_FOUND", "사용자 정보를 찾을 수 없어요.");
+
+        var throttle = CheckAndTrackSendRate(userId, DateTime.UtcNow);
+        if (!throttle.Ok)
+            return (false, "PHONE_OTP_RATE_LIMITED", $"요청이 너무 많아요. {throttle.RetryAfterSec}초 후 다시 시도해주세요.");
 
         if (!string.Equals(user.Phone, normalized, StringComparison.Ordinal))
         {
@@ -102,6 +110,32 @@ public sealed class PhoneVerificationService
         return new string((phone ?? string.Empty)
             .Where(ch => char.IsDigit(ch) || ch == '+')
             .ToArray());
+    }
+
+    private static (bool Ok, int RetryAfterSec) CheckAndTrackSendRate(Guid userId, DateTime nowUtc)
+    {
+        var history = _sendHistories.GetOrAdd(userId, _ => []);
+        lock (history)
+        {
+            history.RemoveAll(t => nowUtc - t > SendWindow);
+
+            if (history.Count > 0)
+            {
+                var elapsed = nowUtc - history[^1];
+                if (elapsed < SendCooldown)
+                    return (false, Math.Max(1, (int)Math.Ceiling((SendCooldown - elapsed).TotalSeconds)));
+            }
+
+            if (history.Count >= MaxSendsPerWindow)
+            {
+                var oldest = history[0];
+                var retry = SendWindow - (nowUtc - oldest);
+                return (false, Math.Max(1, (int)Math.Ceiling(retry.TotalSeconds)));
+            }
+
+            history.Add(nowUtc);
+            return (true, 0);
+        }
     }
 }
 

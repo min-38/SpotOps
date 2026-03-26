@@ -69,9 +69,14 @@ public static class MyProfileEndpoint
 
         var (ok, code, message) = await verification.SendOtpAsync(userId, body.Phone, cancellationToken);
         if (!ok)
+        {
+            var statusCode = code == "PHONE_OTP_RATE_LIMITED"
+                ? StatusCodes.Status429TooManyRequests
+                : StatusCodes.Status400BadRequest;
             return Results.Json(
                 ApiResponse<object?>.Fail(code ?? "PHONE_OTP_SEND_FAILED", message),
-                statusCode: StatusCodes.Status400BadRequest);
+                statusCode: statusCode);
+        }
 
         return Results.Json(ApiResponse<object?>.Ok(null));
     }
