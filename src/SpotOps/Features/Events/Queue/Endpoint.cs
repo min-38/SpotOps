@@ -30,8 +30,17 @@ public static class QueueEndpoint
                 ApiResponse<object?>.Fail("AUTH_UNAUTHORIZED", "Unauthorized."),
                 statusCode: StatusCodes.Status401Unauthorized);
 
-        var res = await queue.JoinAsync(eventId, userId);
-        return Results.Json(ApiResponse<QueueJoinResponse>.Ok(res));
+        try
+        {
+            var res = await queue.JoinAsync(eventId, userId);
+            return Results.Json(ApiResponse<QueueJoinResponse>.Ok(res));
+        }
+        catch (QueueException.QueueBusyException ex)
+        {
+            return Results.Json(
+                ApiResponse<object?>.Fail("QUEUE_BUSY", ex.Message),
+                statusCode: StatusCodes.Status409Conflict);
+        }
     }
 
     private static async Task<IResult> GetStatusAsync(
@@ -43,6 +52,12 @@ public static class QueueEndpoint
         {
             var res = await queue.GetStatusAsync(eventId, queueEntryId);
             return Results.Json(ApiResponse<QueueStatusResponse>.Ok(res));
+        }
+        catch (QueueException.QueueBusyException ex)
+        {
+            return Results.Json(
+                ApiResponse<object?>.Fail("QUEUE_BUSY", ex.Message),
+                statusCode: StatusCodes.Status409Conflict);
         }
         catch (InvalidOperationException ex)
         {
@@ -66,7 +81,16 @@ public static class QueueEndpoint
                     "BatchSize and SelectionWindowSec must be positive."),
                 statusCode: StatusCodes.Status400BadRequest);
 
-        var invited = await queue.InviteNextBatchAsync(eventId, body.BatchSize, body.SelectionWindowSec);
-        return Results.Json(ApiResponse<int>.Ok(invited));
+        try
+        {
+            var invited = await queue.InviteNextBatchAsync(eventId, body.BatchSize, body.SelectionWindowSec);
+            return Results.Json(ApiResponse<int>.Ok(invited));
+        }
+        catch (QueueException.QueueBusyException ex)
+        {
+            return Results.Json(
+                ApiResponse<object?>.Fail("QUEUE_BUSY", ex.Message),
+                statusCode: StatusCodes.Status409Conflict);
+        }
     }
 }

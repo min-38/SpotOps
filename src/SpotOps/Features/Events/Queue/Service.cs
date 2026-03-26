@@ -356,7 +356,7 @@ public sealed class QueueService
             await Task.Delay(RedisLockRetryDelay);
         }
 
-        throw new InvalidOperationException("Queue is busy. Please retry.");
+        throw new QueueException.QueueBusyException();
     }
 
     private sealed class QueueState
