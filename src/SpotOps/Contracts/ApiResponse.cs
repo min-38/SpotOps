@@ -1,6 +1,9 @@
 namespace SpotOps.Contracts;
 
-public sealed record ApiError(string Code, string? Message = null);
+public sealed record ApiError(
+    string Code,
+    string? Message = null,
+    IReadOnlyDictionary<string, string[]>? Details = null);
 
 // JSON API 공통 래퍼
 public sealed class ApiResponse<T>
@@ -24,5 +27,17 @@ public sealed class ApiResponse<T>
 
         var trimmed = code.Trim();
         return new(default, new ApiError(trimmed, string.IsNullOrWhiteSpace(message) ? null : message.Trim()));
+    }
+
+    public static ApiResponse<T> Fail(
+        string code,
+        string? message,
+        IReadOnlyDictionary<string, string[]> details)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            throw new ArgumentException("Error code is required.", nameof(code));
+
+        var trimmed = code.Trim();
+        return new(default, new ApiError(trimmed, string.IsNullOrWhiteSpace(message) ? null : message.Trim(), details));
     }
 }
