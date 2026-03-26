@@ -39,6 +39,15 @@ builder.Services.Configure<JsonOptions>(options =>
 builder.Services.AddRouting(options => options.LowercaseUrls = true);
 builder.Services.AddProblemDetails();
 builder.Services.AddAuthorization();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.OpenApiInfo
+    {
+        Title = "SpotOps API",
+        Version = "v1"
+    });
+});
 builder.Services.AddRazorPages(options =>
 {
     options.RootDirectory = "/Features";
@@ -181,6 +190,16 @@ app.UseStaticFiles();
 app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "SpotOps API v1");
+        options.RoutePrefix = "swagger";
+    });
+}
 
 app.MapGet("/events/list", () => Results.Redirect("/events", permanent: false))
     .AllowAnonymous();
