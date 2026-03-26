@@ -22,10 +22,11 @@ public class RegisterServiceTests
         var db = CreateDb();
         var service = new RegisterService(db);
 
-        var (success, error) = await service.RegisterAsync(new RegisterDto(
+        var (success, code, error) = await service.RegisterAsync(new RegisterDto(
             "new@test.com", "password123", "홍길동", null, UserRole.Buyer, null, null));
 
         Assert.True(success);
+        Assert.Null(code);
         Assert.Null(error);
         Assert.True(db.Users.Any(u => u.Email == "new@test.com"));
     }
@@ -40,10 +41,11 @@ public class RegisterServiceTests
         await service.RegisterAsync(new RegisterDto(
             "dup@test.com", "password123", "홍길동", null, UserRole.Buyer, null, null));
 
-        var (success, error) = await service.RegisterAsync(new RegisterDto(
+        var (success, code, error) = await service.RegisterAsync(new RegisterDto(
             "dup@test.com", "password456", "김철수", null, UserRole.Buyer, null, null));
 
         Assert.False(success);
+        Assert.Equal("AUTH_EMAIL_ALREADY_EXISTS", code);
         Assert.NotNull(error);
     }
 
@@ -61,4 +63,5 @@ public class RegisterServiceTests
         var user = db.Users.First(u => u.Email == "org@test.com");
         Assert.True(db.Organizers.Any(o => o.UserId == user.Id));
     }
+
 }

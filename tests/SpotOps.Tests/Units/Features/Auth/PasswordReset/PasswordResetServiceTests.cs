@@ -65,6 +65,19 @@ public sealed class PasswordResetServiceTests
     }
 
     [Fact]
+    public async Task ResetAsync_WithWeakPassword_ReturnsWeakPasswordError()
+    {
+        await using var db = CreateDb();
+        var sender = new CaptureEmailSender();
+        var svc = new PasswordResetService(db, sender, NullLogger<PasswordResetService>.Instance);
+
+        var (ok, code, _) = await svc.ResetAsync("0123456789ABCDEF", "password123");
+
+        Assert.False(ok);
+        Assert.Equal("PASSWORD_RESET_PASSWORD_WEAK", code);
+    }
+
+    [Fact]
     public async Task RequestAsync_NonExistingEmail_TooManyRequests_ReturnsRateLimited()
     {
         await using var db = CreateDb();

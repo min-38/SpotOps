@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Collections.Concurrent;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using SpotOps.Data;
 using SpotOps.Infrastructure.Email;
@@ -78,8 +79,8 @@ public sealed class PasswordResetService
         if (trimmedToken.Length < 16)
             return (false, "PASSWORD_RESET_TOKEN_INVALID", "토큰이 올바르지 않아요.");
 
-        if (string.IsNullOrWhiteSpace(newPassword) || newPassword.Length < 8)
-            return (false, "PASSWORD_RESET_PASSWORD_WEAK", "비밀번호는 8자 이상이어야 해요.");
+        if (!IsStrongPassword(newPassword))
+            return (false, "PASSWORD_RESET_PASSWORD_WEAK", "비밀번호는 영문 대/소문자, 숫자, 특수문자를 포함해 8~32자여야 해요.");
 
         var tokenHash = Hash(trimmedToken);
         var now = DateTime.UtcNow;
@@ -122,6 +123,18 @@ public sealed class PasswordResetService
             history.Add(nowUtc);
             return (true, 0);
         }
+    }
+
+    private static bool IsStrongPassword(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 8 || password.Length > 32)
+            return false;
+
+        var hasUpper = Regex.IsMatch(password, "[A-Z]");
+        var hasLower = Regex.IsMatch(password, "[a-z]");
+        var hasDigit = Regex.IsMatch(password, "[0-9]");
+        var hasSpecial = Regex.IsMatch(password, "[^a-zA-Z0-9]");
+        return hasUpper && hasLower && hasDigit && hasSpecial;
     }
 }
 
