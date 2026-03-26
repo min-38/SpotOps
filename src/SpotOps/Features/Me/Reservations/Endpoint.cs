@@ -12,6 +12,7 @@ public static class MyReservationsEndpoint
             .RequireAuthorization();
 
         group.MapGet("/reservations", ListAsync);
+        group.MapPost("/reservations/{reservationId:guid}/cancel", CancelAsync);
     }
 
     private static async Task<IResult> ListAsync(
@@ -27,6 +28,26 @@ public static class MyReservationsEndpoint
 
         var rows = await service.ListAsync(userId, take ?? 50, cancellationToken);
         return Results.Json(ApiResponse<IReadOnlyList<MyReservationDto>>.Ok(rows));
+    }
+
+    private static async Task<IResult> CancelAsync(
+        Guid reservationId,
+        MyReservationsService service,
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId))
+            return Results.Json(
+                ApiResponse<object?>.Fail("AUTH_UNAUTHORIZED", "Unauthorized."),
+                statusCode: StatusCodes.Status401Unauthorized);
+
+        var (result, code, message) = await service.CancelAsync(userId, reservationId, cancellationToken);
+        if (result is null)
+            return Results.Json(
+                ApiResponse<object?>.Fail(code ?? "ME_RESERVATION_CANCEL_FAILED", message),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        return Results.Json(ApiResponse<CancelReservationResultDto>.Ok(result));
     }
 }
 

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SpotOps.Data;
+using SpotOps.Models;
 
 namespace SpotOps.Features.Me.Reservations;
 
@@ -56,6 +57,64 @@ public sealed class MyReservationsService
                         r.Ticket.UsedAt,
                         r.Ticket.IssuedAt)))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<(CancelReservationResultDto? Result, string? ErrorCode, string? ErrorMessage)> CancelAsync(
+        Guid userId,
+        Guid reservationId,
+        CancellationToken cancellationToken = default)
+    {
+        var reservation = await _db.Reservations
+            .Include(r => r.Event)
+            .Include(r => r.Seat)
+            .Include(r => r.Payment)
+            .Include(r => r.Ticket)
+            .FirstOrDefaultAsync(r => r.Id == reservationId && r.UserId == userId, cancellationToken);
+
+        if (reservation is null)
+            return (null, "ME_RESERVATION_NOT_FOUND", "예매 내역을 찾을 수 없어요.");
+
+        if (reservation.Status == ReservationStatus.Cancelled)
+            return (null, "ME_RESERVATION_ALREADY_CANCELLED", "이미 취소된 예매예요.");
+
+        if (reservation.Ticket?.IsUsed == true)
+            return (null, "ME_RESERVATION_TICKET_ALREADY_USED", "이미 사용된 티켓은 취소할 수 없어요.");
+
+        var (refundRate, policyReason) = GetRefundPolicy(reservation.Event.EventAt, DateTime.UtcNow);
+        var refundAmount = 0m;
+
+        if (reservation.Payment is not null && reservation.Payment.Status == PaymentStatus.Paid)
+        {
+            refundAmount = decimal.Round(reservation.Payment.Amount * refundRate, 2, MidpointRounding.AwayFromZero);
+            reservation.Payment.Status = PaymentStatus.Refunded;
+        }
+
+        reservation.Status = ReservationStatus.Cancelled;
+        if (reservation.Seat is not null)
+            reservation.Seat.Status = SeatStatus.Available;
+
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return (new CancelReservationResultDto(
+                reservation.Id,
+                reservation.Status,
+                refundRate,
+                refundAmount,
+                policyReason),
+            null,
+            null);
+    }
+
+    private static (decimal RefundRate, string PolicyReason) GetRefundPolicy(DateTime eventAtUtc, DateTime nowUtc)
+    {
+        var diff = eventAtUtc - nowUtc;
+        if (diff >= TimeSpan.FromDays(7))
+            return (1.0m, "공연 7일 전 취소: 100% 환불");
+
+        if (diff >= TimeSpan.FromDays(3))
+            return (0.5m, "공연 3일 전 취소: 50% 환불");
+
+        return (0.0m, "공연 3일 미만 취소: 환불 불가");
     }
 }
 

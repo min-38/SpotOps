@@ -39,3 +39,9 @@ public sealed record MyReservationDto(
     MyReservationPaymentDto? Payment,
     MyReservationTicketDto? Ticket);
 
+public sealed record CancelReservationResultDto(
+    Guid ReservationId,
+    ReservationStatus Status,
+    decimal RefundRate,
+    decimal RefundAmount,
+    string PolicyReason);

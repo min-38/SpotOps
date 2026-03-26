@@ -122,6 +122,119 @@ public sealed class MyReservationsServiceTests
         Assert.Equal(5, tooBig.Count);
     }
 
+    [Fact]
+    public async Task CancelAsync_ConfirmedPaidReservation_RefundsByPolicy_AndReleasesSeat()
+    {
+        await using var db = CreateDb();
+        var (user, ev) = await SeedCoreAsync(db);
+        ev.EventAt = DateTime.UtcNow.AddDays(8);
+        await db.SaveChangesAsync();
+
+        var seat = new Seat
+        {
+            EventId = ev.Id,
+            Section = "A",
+            Row = "1",
+            Number = "9",
+            Status = SeatStatus.Sold
+        };
+        db.Seats.Add(seat);
+        await db.SaveChangesAsync();
+
+        var reservation = new Reservation
+        {
+            UserId = user.Id,
+            EventId = ev.Id,
+            SeatId = seat.Id,
+            Status = ReservationStatus.Confirmed,
+            ExpiresAt = DateTime.UtcNow.AddMinutes(10)
+        };
+        db.Reservations.Add(reservation);
+        await db.SaveChangesAsync();
+
+        db.Payments.Add(new Payment
+        {
+            ReservationId = reservation.Id,
+            PortOnePaymentId = $"spotops-{reservation.Id:N}",
+            Amount = 40000,
+            Status = PaymentStatus.Paid
+        });
+        await db.SaveChangesAsync();
+
+        var svc = new MyReservationsService(db);
+        var (result, code, _) = await svc.CancelAsync(user.Id, reservation.Id);
+
+        Assert.Null(code);
+        Assert.NotNull(result);
+        Assert.Equal(ReservationStatus.Cancelled, result!.Status);
+        Assert.Equal(1.0m, result.RefundRate);
+        Assert.Equal(40000m, result.RefundAmount);
+
+        var savedReservation = await db.Reservations.SingleAsync(r => r.Id == reservation.Id);
+        var savedSeat = await db.Seats.SingleAsync(s => s.Id == seat.Id);
+        var savedPayment = await db.Payments.SingleAsync(p => p.ReservationId == reservation.Id);
+
+        Assert.Equal(ReservationStatus.Cancelled, savedReservation.Status);
+        Assert.Equal(SeatStatus.Available, savedSeat.Status);
+        Assert.Equal(PaymentStatus.Refunded, savedPayment.Status);
+    }
+
+    [Fact]
+    public async Task CancelAsync_ThreeToSevenDaysBeforeEvent_ReturnsFiftyPercentRefund()
+    {
+        await using var db = CreateDb();
+        var (user, ev) = await SeedCoreAsync(db);
+        ev.EventAt = DateTime.UtcNow.AddDays(4);
+        await db.SaveChangesAsync();
+
+        var reservation = new Reservation
+        {
+            UserId = user.Id,
+            EventId = ev.Id,
+            Status = ReservationStatus.Confirmed
+        };
+        db.Reservations.Add(reservation);
+        await db.SaveChangesAsync();
+
+        db.Payments.Add(new Payment
+        {
+            ReservationId = reservation.Id,
+            PortOnePaymentId = $"spotops-{reservation.Id:N}",
+            Amount = 30000,
+            Status = PaymentStatus.Paid
+        });
+        await db.SaveChangesAsync();
+
+        var svc = new MyReservationsService(db);
+        var (result, _, _) = await svc.CancelAsync(user.Id, reservation.Id);
+
+        Assert.NotNull(result);
+        Assert.Equal(0.5m, result!.RefundRate);
+        Assert.Equal(15000m, result.RefundAmount);
+    }
+
+    [Fact]
+    public async Task CancelAsync_AlreadyCancelled_ReturnsError()
+    {
+        await using var db = CreateDb();
+        var (user, ev) = await SeedCoreAsync(db);
+
+        var reservation = new Reservation
+        {
+            UserId = user.Id,
+            EventId = ev.Id,
+            Status = ReservationStatus.Cancelled
+        };
+        db.Reservations.Add(reservation);
+        await db.SaveChangesAsync();
+
+        var svc = new MyReservationsService(db);
+        var (result, code, _) = await svc.CancelAsync(user.Id, reservation.Id);
+
+        Assert.Null(result);
+        Assert.Equal("ME_RESERVATION_ALREADY_CANCELLED", code);
+    }
+
     private static async Task<(User user, Event ev)> SeedCoreAsync(AppDbContext db)
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
