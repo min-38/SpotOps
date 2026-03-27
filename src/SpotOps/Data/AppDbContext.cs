@@ -16,6 +16,7 @@ public class AppDbContext : DbContext
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<QueueEntry> QueueEntries => Set<QueueEntry>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
@@ -111,6 +112,15 @@ public class AppDbContext : DbContext
             .WithMany()
             .HasForeignKey(t => t.UserId);
         mb.Entity<PasswordResetToken>()
+            .HasIndex(t => t.TokenHash)
+            .IsUnique();
+
+        // RefreshToken
+        mb.Entity<RefreshToken>()
+            .HasOne(t => t.User)
+            .WithMany(u => u.RefreshTokens)
+            .HasForeignKey(t => t.UserId);
+        mb.Entity<RefreshToken>()
             .HasIndex(t => t.TokenHash)
             .IsUnique();
     }

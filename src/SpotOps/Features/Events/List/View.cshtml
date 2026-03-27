@@ -22,7 +22,6 @@ else
                 <div class="small text-muted">
                     <span>@ev.VenueName</span>
                     <span>· @ev.EventAt.ToLocalTime().ToString("yyyy.MM.dd HH:mm")</span>
-                    <span>· @ev.Price.ToString("N0")원</span>
                     <span>· @(ev.TicketType == SpotOps.Models.TicketType.Seated ? "좌석 지정" : "선착순")</span>
                 </div>
             </li>

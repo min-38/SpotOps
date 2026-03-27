@@ -23,7 +23,6 @@ public sealed class ListEventsService
                 e.Title,
                 e.VenueName,
                 e.EventAt,
-                e.Price,
                 e.TicketType,
                 EventSaleStatusResolver.Resolve(e.SaleStartAt, e.SaleEndAt, now)))
             .ToList();

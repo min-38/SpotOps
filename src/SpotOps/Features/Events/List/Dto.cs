@@ -8,6 +8,5 @@ public sealed record EventListRowDto(
     string Title,
     string VenueName,
     DateTime EventAt,
-    decimal Price,
     TicketType TicketType,
     EventSaleStatus SaleStatus);

@@ -25,6 +25,7 @@ public class User
     public Organizer? Organizer { get; set; }
     public ICollection<Reservation> Reservations { get; set; } = [];
     public ICollection<QueueEntry> QueueEntries { get; set; } = [];
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
 }
 
 public enum UserRole { Buyer, Organizer, Admin }
