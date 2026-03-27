@@ -23,12 +23,13 @@ public class RegisterServiceTests
         var service = new RegisterService(db);
 
         var (success, code, error) = await service.RegisterAsync(new RegisterDto(
-            "new@test.com", "password123", "홍길동", null, UserRole.Buyer, null, null));
+            "new@test.com", "password123", "홍길동", null));
 
         Assert.True(success);
         Assert.Null(code);
         Assert.Null(error);
         Assert.True(db.Users.Any(u => u.Email == "new@test.com"));
+        Assert.Equal(UserRole.Buyer, db.Users.First(u => u.Email == "new@test.com").Role);
     }
 
     // 실패: 이메일 중복
@@ -39,29 +40,29 @@ public class RegisterServiceTests
         var service = new RegisterService(db);
 
         await service.RegisterAsync(new RegisterDto(
-            "dup@test.com", "password123", "홍길동", null, UserRole.Buyer, null, null));
+            "dup@test.com", "password123", "홍길동", null));
 
         var (success, code, error) = await service.RegisterAsync(new RegisterDto(
-            "dup@test.com", "password456", "김철수", null, UserRole.Buyer, null, null));
+            "dup@test.com", "password456", "김철수", null));
 
         Assert.False(success);
         Assert.Equal("AUTH_EMAIL_ALREADY_EXISTS", code);
         Assert.NotNull(error);
     }
 
-    // 실패: 주최자 가입 시 필수 정보 누락
+    // 회원가입은 항상 구매자 역할로 생성
     [Fact]
-    public async Task Register_AsOrganizer_CreatesOrganizerRecord()
+    public async Task Register_AlwaysCreatesBuyer()
     {
         var db = CreateDb();
         var service = new RegisterService(db);
 
         await service.RegisterAsync(new RegisterDto(
-            "org@test.com", "password123", "주최자", null,
-            UserRole.Organizer, "1234567890", "테스트기획사"));
+            "buyer@test.com", "password123", "일반회원", null));
 
-        var user = db.Users.First(u => u.Email == "org@test.com");
-        Assert.True(db.Organizers.Any(o => o.UserId == user.Id));
+        var user = db.Users.First(u => u.Email == "buyer@test.com");
+        Assert.Equal(UserRole.Buyer, user.Role);
+        Assert.False(db.Organizers.Any(o => o.UserId == user.Id));
     }
 
 }

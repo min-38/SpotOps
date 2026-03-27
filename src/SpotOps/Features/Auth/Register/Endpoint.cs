@@ -1,5 +1,4 @@
 using SpotOps.Contracts;
-using SpotOps.Models;
 using System.Net.Mail;
 using System.Text.RegularExpressions;
 
@@ -54,8 +53,6 @@ public static class RegisterEndpoint
         var password = body.Password ?? string.Empty;
         var name = (body.Name ?? string.Empty).Trim();
         var phone = string.IsNullOrWhiteSpace(body.Phone) ? null : body.Phone.Trim();
-        var businessNumber = string.IsNullOrWhiteSpace(body.BusinessNumber) ? null : body.BusinessNumber.Trim();
-        var companyName = string.IsNullOrWhiteSpace(body.CompanyName) ? null : body.CompanyName.Trim();
 
         if (!IsValidEmail(email))
             AddError(errors, "email", "올바른 이메일 형식이 아니에요.");
@@ -68,14 +65,6 @@ public static class RegisterEndpoint
 
         if (phone is not null && phone.Length > 30)
             AddError(errors, "phone", "전화번호 형식이 올바르지 않아요.");
-
-        if (body.Role == UserRole.Organizer)
-        {
-            if (string.IsNullOrWhiteSpace(businessNumber))
-                AddError(errors, "businessNumber", "주최자 가입 시 사업자번호는 필수예요.");
-            if (string.IsNullOrWhiteSpace(companyName))
-                AddError(errors, "companyName", "주최자 가입 시 회사명은 필수예요.");
-        }
 
         return errors.ToDictionary(k => k.Key, v => v.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
     }

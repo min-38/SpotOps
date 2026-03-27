@@ -1,4 +1,5 @@
 using SpotOps.Contracts;
+using SpotOps.Models;
 using System.Security.Claims;
 
 namespace SpotOps.Features.Auth.Login;
@@ -16,6 +17,11 @@ public static class LoginEndpoint
                 if (error is not null || user is null)
                     return Results.Json(
                         ApiResponse<LoginUserDto>.Fail("AUTH_INVALID_CREDENTIALS", error),
+                        statusCode: StatusCodes.Status401Unauthorized);
+
+                if (user.Role is not UserRole.Buyer)
+                    return Results.Json(
+                        ApiResponse<LoginUserDto>.Fail("AUTH_INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않아요."),
                         statusCode: StatusCodes.Status401Unauthorized);
 
                 var tokens = await login.CreateTokenPairAsync(user, cancellationToken);

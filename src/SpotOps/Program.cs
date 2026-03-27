@@ -7,7 +7,6 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.Json;
-using Microsoft.AspNetCore.Mvc.Razor;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -54,14 +53,6 @@ builder.Services.AddSwaggerGen(options =>
         Title = "SpotOps API",
         Version = "v1"
     });
-});
-builder.Services.AddRazorPages(options =>
-{
-    options.RootDirectory = "/Features";
-});
-builder.Services.Configure<RazorViewEngineOptions>(options =>
-{
-    options.PageViewLocationFormats.Add("/Features/Shared/{0}.cshtml");
 });
 
 var jwtIssuer = builder.Configuration["JWT_ISSUER"] ?? "spotops";
@@ -204,7 +195,6 @@ else
     app.UseExceptionHandler();
 
 app.UseStatusCodePages();
-app.UseStaticFiles();
 app.UseCors("frontend");
 app.UseAuthentication();
 app.UseAuthorization();
@@ -218,14 +208,6 @@ if (app.Environment.IsDevelopment())
         options.RoutePrefix = "swagger";
     });
 }
-
-app.MapGet("/events/list", () => Results.Redirect("/events", permanent: false))
-    .AllowAnonymous();
-
-app.MapGet("/organizer/create-event", () => Results.Redirect("/events/add", permanent: false))
-    .AllowAnonymous();
-
-app.MapRazorPages();
 
 app.MapGet("/api/health", () => Results.Json(new { status = "ok" }))
     .WithTags("Health")
