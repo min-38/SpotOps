@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SpotOps.Data;
@@ -11,9 +12,11 @@ using SpotOps.Data;
 namespace SpotOps.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260327053103_RenameRefreshTokensToSnakeCase")]
+    partial class RenameRefreshTokensToSnakeCase
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -130,126 +133,101 @@ namespace SpotOps.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("token_hash");
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("UsedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("used_at");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
                     b.HasIndex("TokenHash")
-                        .IsUnique()
-                        .HasDatabaseName("ix_password_reset_tokens_token_hash");
+                        .IsUnique();
 
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_password_reset_tokens_user_id");
+                    b.HasIndex("UserId");
 
-                    b.ToTable("password_reset_tokens", (string)null);
+                    b.ToTable("PasswordResetTokens");
                 });
 
             modelBuilder.Entity("SpotOps.Models.Payment", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("numeric(10,2)")
-                        .HasColumnName("amount");
+                        .HasColumnType("numeric(10,2)");
 
                     b.Property<DateTime?>("PaidAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("paid_at");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PgTransactionId")
-                        .HasColumnType("text")
-                        .HasColumnName("pg_transaction_id");
+                        .HasColumnType("text");
 
                     b.Property<string>("PortOnePaymentId")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("port_one_payment_id");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("ReservationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reservation_id");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("status");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
                     b.HasIndex("PortOnePaymentId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_payments_port_one_payment_id");
+                        .IsUnique();
 
                     b.HasIndex("ReservationId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_payments_reservation_id");
+                        .IsUnique();
 
-                    b.ToTable("payments", (string)null);
+                    b.ToTable("Payments");
                 });
 
             modelBuilder.Entity("SpotOps.Models.QueueEntry", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("EnteredAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("entered_at");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("EventId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("event_id");
+                        .HasColumnType("uuid");
 
                     b.Property<int>("Position")
-                        .HasColumnType("integer")
-                        .HasColumnName("position");
+                        .HasColumnType("integer");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("status");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_queue_entries_user_id");
+                    b.HasIndex("UserId");
 
                     b.HasIndex("EventId", "UserId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_queue_entries_event_id_user_id");
+                        .IsUnique();
 
-                    b.ToTable("queue_entries", (string)null);
+                    b.ToTable("QueueEntries");
                 });
 
             modelBuilder.Entity("SpotOps.Models.RefreshToken", b =>
@@ -296,134 +274,108 @@ namespace SpotOps.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid>("EventId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("event_id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("expires_at");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("SeatId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("seat_id");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("status");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EventId")
-                        .HasDatabaseName("ix_reservations_event_id");
+                    b.HasIndex("EventId");
 
                     b.HasIndex("SeatId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_reservations_seat_id");
+                        .IsUnique();
 
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_reservations_user_id");
+                    b.HasIndex("UserId");
 
-                    b.ToTable("reservations", (string)null);
+                    b.ToTable("Reservations");
                 });
 
             modelBuilder.Entity("SpotOps.Models.Seat", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<Guid>("EventId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("event_id");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("Number")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("number");
+                        .HasColumnType("text");
 
                     b.Property<string>("Row")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("row");
+                        .HasColumnType("text");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
                         .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("bytea")
-                        .HasColumnName("row_version");
+                        .HasColumnType("bytea");
 
                     b.Property<string>("Section")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("section");
+                        .HasColumnType("text");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("status");
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EventId")
-                        .HasDatabaseName("ix_seats_event_id");
+                    b.HasIndex("EventId");
 
-                    b.ToTable("seats", (string)null);
+                    b.ToTable("Seats");
                 });
 
             modelBuilder.Entity("SpotOps.Models.Ticket", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("IsUsed")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_used");
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("IssuedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("issued_at");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("QrToken")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("qr_token");
+                        .HasColumnType("text");
 
                     b.Property<Guid>("ReservationId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("reservation_id");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime?>("UsedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("used_at");
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
                     b.HasIndex("QrToken")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tickets_qr_token");
+                        .IsUnique();
 
                     b.HasIndex("ReservationId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tickets_reservation_id");
+                        .IsUnique();
 
-                    b.ToTable("tickets", (string)null);
+                    b.ToTable("Tickets");
                 });
 
             modelBuilder.Entity("SpotOps.Models.User", b =>
@@ -504,8 +456,7 @@ namespace SpotOps.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_password_reset_tokens_users_user_id");
+                        .IsRequired();
 
                     b.Navigation("User");
                 });
@@ -516,8 +467,7 @@ namespace SpotOps.Migrations
                         .WithOne("Payment")
                         .HasForeignKey("SpotOps.Models.Payment", "ReservationId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_payments_reservations_reservation_id");
+                        .IsRequired();
 
                     b.Navigation("Reservation");
                 });
@@ -528,15 +478,13 @@ namespace SpotOps.Migrations
                         .WithMany("QueueEntries")
                         .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_queue_entries_events_event_id");
+                        .IsRequired();
 
                     b.HasOne("SpotOps.Models.User", "User")
                         .WithMany("QueueEntries")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_queue_entries_users_user_id");
+                        .IsRequired();
 
                     b.Navigation("Event");
 
@@ -561,20 +509,17 @@ namespace SpotOps.Migrations
                         .WithMany("Reservations")
                         .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_reservations_events_event_id");
+                        .IsRequired();
 
                     b.HasOne("SpotOps.Models.Seat", "Seat")
                         .WithOne("Reservation")
-                        .HasForeignKey("SpotOps.Models.Reservation", "SeatId")
-                        .HasConstraintName("fk_reservations_seats_seat_id");
+                        .HasForeignKey("SpotOps.Models.Reservation", "SeatId");
 
                     b.HasOne("SpotOps.Models.User", "User")
                         .WithMany("Reservations")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_reservations_users_user_id");
+                        .IsRequired();
 
                     b.Navigation("Event");
 
@@ -589,8 +534,7 @@ namespace SpotOps.Migrations
                         .WithMany("Seats")
                         .HasForeignKey("EventId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_seats_events_event_id");
+                        .IsRequired();
 
                     b.Navigation("Event");
                 });
@@ -601,8 +545,7 @@ namespace SpotOps.Migrations
                         .WithOne("Ticket")
                         .HasForeignKey("SpotOps.Models.Ticket", "ReservationId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_tickets_reservations_reservation_id");
+                        .IsRequired();
 
                     b.Navigation("Reservation");
                 });
