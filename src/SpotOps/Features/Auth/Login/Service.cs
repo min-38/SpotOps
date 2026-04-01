@@ -1,183 +1,125 @@
+using System.Net.Mail;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using SpotOps.Data;
 using SpotOps.Models;
-using System.Security.Cryptography;
-using System.Net.Mail;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
+using SpotOps.Features.Auth.JWT;
 
 namespace SpotOps.Features.Auth.Login;
 
-public sealed class LoginService
+public sealed partial class LoginService : ILoginService
 {
     private readonly AppDbContext _db;
-    private readonly IConfiguration _configuration;
+    private readonly IJwtTokenService _jwtTokenService;
+    private readonly ILogger<LoginService> _logger;
 
-    public LoginService(AppDbContext db, IConfiguration configuration)
+    public LoginService(AppDbContext db, IJwtTokenService jwtTokenService, ILogger<LoginService> logger)
     {
         _db = db;
-        _configuration = configuration;
+        _jwtTokenService = jwtTokenService;
+        _logger = logger;
     }
 
-    public async Task<(User? User, string? ErrorMessage)> ValidateAsync(LoginDto dto, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// 로그인 유저 검증
+    /// </summary>
+    /// <param name="dto">로그인 요청 정보</param>
+    /// <param name="cancellationToken">취소 토큰</param>
+    /// <returns>유저 정보</returns>
+    public async Task<User?> ValidateAsync(string email, string password, CancellationToken ct = default)
     {
-        var email = (dto.Email ?? string.Empty).Trim().ToLowerInvariant();
-        var password = dto.Password ?? string.Empty;
-
-        if (!IsValidEmail(email) || string.IsNullOrWhiteSpace(password))
-            return (null, "이메일 또는 비밀번호가 올바르지 않아요.");
-
-        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
-
+        // 이미 endpoint에서 검증을 했기 때문에 유효성 검사는 여기서 하지 않는다.
+        
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
         if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
-            return (null, "이메일 또는 비밀번호가 올바르지 않아요.");
-
-        return (user, null);
-    }
-
-    public (string AccessToken, long ExpiresInSeconds) CreateAccessToken(User user)
-    {
-        var issuer = _configuration["JWT_ISSUER"] ?? "spotops";
-        var audience = _configuration["JWT_AUDIENCE"] ?? "spotops-client";
-        var secret = _configuration["JWT_SECRET"] ?? throw new InvalidOperationException("JWT_SECRET is required.");
-        var expiresInSeconds = long.TryParse(_configuration["JWT_ACCESS_TOKEN_EXPIRES_SECONDS"], out var rawExpires)
-            ? rawExpires
-            : 60 * 60 * 2;
-        if (expiresInSeconds <= 0)
-            expiresInSeconds = 60 * 60 * 2;
-
-        var now = DateTime.UtcNow;
-        var claims = new List<Claim>
         {
-            new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Email, user.Email),
-            new(ClaimTypes.Name, user.Name),
-            new(ClaimTypes.Role, user.Role.ToString())
-        };
+            _logger.LogWarning("Invalid email or password: {Email}", email);
+            return null;
+        }
 
-        var credentials = new SigningCredentials(
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
-            SecurityAlgorithms.HmacSha256);
-
-        var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
-            claims: claims,
-            notBefore: now,
-            expires: now.AddSeconds(expiresInSeconds),
-            signingCredentials: credentials);
-
-        return (new JwtSecurityTokenHandler().WriteToken(token), expiresInSeconds);
+        _logger.LogInformation("User validated: {Email}", email);
+        return user;
     }
 
-    public async Task<LoginTokenDto> CreateTokenPairAsync(User user, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// 토큰 생성
+    /// </summary>
+    /// <param name="user">유저 정보</param>
+    /// <param name="ct">취소 토큰</param>
+    /// <returns>토큰 정보</returns>
+    public async Task<JWTResponse> CreateTokenPairAsync(User user, CancellationToken ct = default)
     {
-        var (accessToken, expiresInSeconds) = CreateAccessToken(user);
-        var refreshToken = await CreateRefreshTokenAsync(user.Id, cancellationToken);
-        var refreshTtlDays = GetRefreshTokenTtlDays();
+        if (user is null)
+        {
+            _logger.LogWarning("User is null: {User}", user);
+            throw new ArgumentNullException(nameof(user));
+        }
+            
+        var (accessToken, expiresInSeconds) = _jwtTokenService.CreateAccessToken(user);
+        if (accessToken is null)
+        {
+            _logger.LogWarning("Failed to create access token: {User}", user);
+            throw new InvalidOperationException("Failed to create access token");
+        }
 
-        return new LoginTokenDto(
-            accessToken,
-            "Bearer",
-            expiresInSeconds,
-            refreshToken,
-            refreshTtlDays * 24 * 60 * 60);
+        var refreshToken = _jwtTokenService.CreateRefreshToken();
+        var refreshTokenExpiresInSeconds = _jwtTokenService.GetRefreshTokenTtlDays();
+
+        _logger.LogInformation("Token pair created for user {UserId}: {AccessToken}, {RefreshToken}", user.Id, accessToken, refreshToken);
+
+        return new JWTResponse(accessToken, "Bearer", expiresInSeconds, refreshToken, refreshTokenExpiresInSeconds);
     }
 
-    public async Task<(User? User, LoginTokenDto? Tokens, string? ErrorCode, string? ErrorMessage)> RefreshAsync(
-        string refreshToken,
-        CancellationToken cancellationToken = default)
+    /// <summary>
+    /// refresh token 갱신
+    /// </summary>
+    /// <param name="refreshToken">refresh token</param>
+    /// <param name="ct">취소 토큰</param>
+    /// <returns>유저 정보, 토큰 정보, 에러 코드</returns>
+    public async Task<(User? User, JWTResponse? Tokens, string? ErrorCode)> RefreshTokenAsync(
+        string rawToken, // 기존 refresh token
+        CancellationToken ct = default)
     {
-        var rawToken = (refreshToken ?? string.Empty).Trim();
-        if (rawToken.Length < 16)
-            return (null, null, "AUTH_REFRESH_TOKEN_INVALID", "리프레시 토큰이 올바르지 않아요.");
-
         var now = DateTime.UtcNow;
-        var tokenHash = Hash(rawToken);
+        var tokenHash = _jwtTokenService.HashRefresh(rawToken);
+
+        // 존재하지 않은 refresh token이거나, 취소/만료된 토큰이면 에러 반환
         var existing = await _db.RefreshTokens
             .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.TokenHash == tokenHash, cancellationToken);
-
+            .Where(t => t.TokenHash == tokenHash)
+            .FirstOrDefaultAsync(ct);
         if (existing is null || existing.RevokedAt is not null || existing.ExpiresAt <= now)
-            return (null, null, "AUTH_REFRESH_TOKEN_INVALID", "리프레시 토큰이 올바르지 않아요.");
+        {
+            _logger.LogWarning("Invalid refresh token: {RefreshToken}", rawToken);
+            return (null, null, "AUTH_REFRESH_TOKEN_INVALID");
+        }
 
         existing.RevokedAt = now;
-        var newToken = await CreateRefreshTokenAsync(existing.UserId, cancellationToken);
-        var (accessToken, expiresInSeconds) = CreateAccessToken(existing.User);
-        var refreshTtlDays = GetRefreshTokenTtlDays();
 
-        await _db.SaveChangesAsync(cancellationToken);
+        // 새로운 refresh token 생성 후 DB에 저장
+        var newRefreshToken = _jwtTokenService.CreateRefreshToken();
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = existing.User.Id,
+            TokenHash = _jwtTokenService.HashRefresh(newRefreshToken),
+            ExpiresAt = DateTime.UtcNow.AddDays(_jwtTokenService.GetRefreshTokenTtlDays())
+        });
+        await _db.SaveChangesAsync(ct);
+
+        var (accessToken, expiresInSeconds) = _jwtTokenService.CreateAccessToken(existing.User);
+        var refreshTokenExpiresInSeconds = _jwtTokenService.GetRefreshTokenTtlDays() * 24 * 60 * 60;
+
+        _logger.LogInformation("Refresh token refreshed for user {UserId}: {RefreshToken}", existing.User.Id, newRefreshToken);
 
         return (
             existing.User,
-            new LoginTokenDto(
+            new JWTResponse(
                 accessToken,
                 "Bearer",
                 expiresInSeconds,
-                newToken,
-                refreshTtlDays * 24 * 60 * 60),
-            null,
+                newRefreshToken,
+                refreshTokenExpiresInSeconds),
             null);
-    }
-
-    public async Task RevokeRefreshTokenAsync(Guid userId, string refreshToken, CancellationToken cancellationToken = default)
-    {
-        var rawToken = (refreshToken ?? string.Empty).Trim();
-        if (rawToken.Length < 16)
-            return;
-
-        var tokenHash = Hash(rawToken);
-        var existing = await _db.RefreshTokens
-            .FirstOrDefaultAsync(t => t.UserId == userId && t.TokenHash == tokenHash, cancellationToken);
-
-        if (existing is null || existing.RevokedAt is not null)
-            return;
-
-        existing.RevokedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync(cancellationToken);
-    }
-
-    private async Task<string> CreateRefreshTokenAsync(Guid userId, CancellationToken cancellationToken)
-    {
-        var token = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(64));
-        var refreshToken = new RefreshToken
-        {
-            UserId = userId,
-            TokenHash = Hash(token),
-            ExpiresAt = DateTime.UtcNow.AddDays(GetRefreshTokenTtlDays())
-        };
-
-        _db.RefreshTokens.Add(refreshToken);
-        await _db.SaveChangesAsync(cancellationToken);
-        return token;
-    }
-
-    private int GetRefreshTokenTtlDays()
-    {
-        if (!int.TryParse(_configuration["JWT_REFRESH_TOKEN_EXPIRES_DAYS"], out var days) || days <= 0)
-            return 14;
-        return days;
-    }
-
-    private static string Hash(string value)
-    {
-        var bytes = Encoding.UTF8.GetBytes(value);
-        var hashBytes = SHA256.HashData(bytes);
-        return Convert.ToHexString(hashBytes);
-    }
-
-    private static bool IsValidEmail(string email)
-    {
-        try
-        {
-            _ = new MailAddress(email);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
     }
 }

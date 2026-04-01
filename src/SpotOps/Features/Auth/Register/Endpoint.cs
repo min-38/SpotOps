@@ -1,99 +1,70 @@
+using Microsoft.Extensions.Options;
 using SpotOps.Contracts;
-using System.Net.Mail;
-using System.Text.RegularExpressions;
+using SpotOps.Features.Auth;
+using SpotOps.Infrastructure.PortOne;
 
 namespace SpotOps.Features.Auth.Register;
 
-public static class RegisterEndpoint
+public static partial class RegisterEndpoint
 {
-    public static void Map(WebApplication app)
+    public static void Map(RouteGroupBuilder auth)
     {
-        var g = app.MapGroup("/api/auth").WithTags("Auth");
-        g.MapPost("/register", RegisterAsync).AllowAnonymous();
+        auth.MapGet("/iv/config", GetIvConfigAsync).AllowAnonymous();
+        auth.MapPost("/iv/verify", VerifyIvAsync).AllowAnonymous();
+        auth.MapPost("/register", RegisterAsync).AllowAnonymous();
     }
 
-    private static async Task<IResult> RegisterAsync(
-        RegisterDto body,
-        RegisterService register,
-        CancellationToken cancellationToken)
+    // PortOne storeId, verifyChannelId 조회
+    public static IResult GetIvConfigAsync(IOptions<PortOneOptions> portOne)
     {
-        var validationErrors = ValidateInput(body);
-        if (validationErrors.Count > 0)
+        var o = portOne.Value;
+        return Results.Json(
+            ApiResponse<object?>.Ok(new PortOneIvConfigResponse(o.StoreId, o.VerifyChannelId)));
+    }
+    
+    // PortOne 아이디 검증
+    public static async Task<IResult> VerifyIvAsync(
+        PortOneIvVerifyRequest request,
+        IRegisterService registerService,
+        CancellationToken ct)
+    {
+        var isValid = RegisterValidation.IvValidate(request);
+        if (!isValid)
             return Results.Json(
-                ApiResponse<object?>.Fail(
-                    "AUTH_VALIDATION_FAILED",
-                    "입력값이 올바르지 않아요.",
-                    validationErrors),
+                ApiResponse<object?>.Fail("AUTH_VERIFY_IV_INVALID_REQUEST"),
                 statusCode: StatusCodes.Status400BadRequest);
 
-        var (success, errorCode, errorMessage) = await register.RegisterAsync(body, cancellationToken);
+        var (success, verifiedIdentity, errorCode) = await registerService.VerifyIvAsync(request, ct);
         if (!success)
             return Results.Json(
-                ApiResponse<object?>.Fail(errorCode ?? "AUTH_REGISTER_FAILED", errorMessage),
+                ApiResponse<object?>.Fail(errorCode ?? "AUTH_VERIFY_IV_FAILED"),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        if (verifiedIdentity is null)
+            return Results.Json(
+                ApiResponse<object?>.Fail("AUTH_VERIFY_IV_INVALID_RESPONSE"),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        return Results.Json(ApiResponse<PortOneVerifiedIdentityResponse>.Ok(verifiedIdentity));
+    }
+
+    public static async Task<IResult> RegisterAsync(
+        RegisterRequest request,
+        IRegisterService registerService,
+        CancellationToken ct)
+    {
+        var isValid = RegisterValidation.RegisterValidate(request);
+        if (!isValid)
+            return Results.Json(
+                ApiResponse<object?>.Fail("AUTH_VALIDATION_FAILED"),
+                statusCode: StatusCodes.Status400BadRequest);
+
+        var (success, errorCode) = await registerService.RegisterAsync(request, ct);
+        if (!success)
+            return Results.Json(
+                ApiResponse<object?>.Fail(errorCode ?? "AUTH_REGISTER_FAILED"),
                 statusCode: StatusCodes.Status400BadRequest);
 
         return Results.Json(ApiResponse<object?>.Ok(null), statusCode: StatusCodes.Status201Created);
-    }
-
-    private static Dictionary<string, string[]> ValidateInput(RegisterDto body)
-    {
-        var errors = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-
-        static void AddError(Dictionary<string, List<string>> map, string field, string message)
-        {
-            if (!map.TryGetValue(field, out var list))
-            {
-                list = [];
-                map[field] = list;
-            }
-            list.Add(message);
-        }
-
-        var email = (body.Email ?? string.Empty).Trim();
-        var password = body.Password ?? string.Empty;
-        var name = (body.Name ?? string.Empty).Trim();
-        var phone = string.IsNullOrWhiteSpace(body.Phone) ? null : body.Phone.Trim();
-
-        if (!IsValidEmail(email))
-            AddError(errors, "email", "올바른 이메일 형식이 아니에요.");
-
-        if (!IsStrongPassword(password))
-            AddError(errors, "password", "비밀번호는 영문 대/소문자, 숫자, 특수문자를 포함해 8~32자여야 해요.");
-
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 100)
-            AddError(errors, "name", "이름은 1~100자여야 해요.");
-
-        if (phone is not null && phone.Length > 30)
-            AddError(errors, "phone", "전화번호 형식이 올바르지 않아요.");
-
-        return errors.ToDictionary(k => k.Key, v => v.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
-    }
-
-    private static bool IsValidEmail(string email)
-    {
-        if (string.IsNullOrWhiteSpace(email))
-            return false;
-
-        try
-        {
-            _ = new MailAddress(email);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static bool IsStrongPassword(string password)
-    {
-        if (string.IsNullOrWhiteSpace(password) || password.Length < 8 || password.Length > 32)
-            return false;
-
-        var hasUpper = Regex.IsMatch(password, "[A-Z]");
-        var hasLower = Regex.IsMatch(password, "[a-z]");
-        var hasDigit = Regex.IsMatch(password, "[0-9]");
-        var hasSpecial = Regex.IsMatch(password, "[^a-zA-Z0-9]");
-        return hasUpper && hasLower && hasDigit && hasSpecial;
     }
 }

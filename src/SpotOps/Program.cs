@@ -14,18 +14,16 @@ using Microsoft.IdentityModel.Tokens;
 using SpotOps.Data;
 
 // Features
-using SpotOps.Features.Auth.Login;
-using SpotOps.Features.Auth.Register;
-using SpotOps.Features.Auth.PasswordReset;
-using SpotOps.Features.Events.Add;
-using SpotOps.Features.Events.Detail;
-using SpotOps.Features.Events.List;
-using SpotOps.Features.Events.Reserve;
-using SpotOps.Features.Events.Queue;
-using SpotOps.Features.Events.Selection;
-using SpotOps.Features.Payments;
-using SpotOps.Features.Me.Reservations;
-using SpotOps.Features.Me.Profile;
+using SpotOps.Features.Auth;
+using SpotOps.Features.Auth.JWT;
+// using SpotOps.Features.Events.Detail;
+// using SpotOps.Features.Events.List;
+// using SpotOps.Features.Events.Reserve;
+// using SpotOps.Features.Events.Queue;
+// using SpotOps.Features.Events.Selection;
+// using SpotOps.Features.Payments;
+// using SpotOps.Features.Me.Reservations;
+// using SpotOps.Features.Me.Profile;
 
 // Infrastructure
 using SpotOps.Infrastructure.PortOne;
@@ -63,6 +61,8 @@ if (string.IsNullOrWhiteSpace(jwtSecret))
 if (jwtSecret.Length < 32)
     throw new InvalidOperationException("JWT_SECRET must be at least 32 characters.");
 
+builder.Services.AddJwtFeature(builder.Configuration);
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -92,19 +92,16 @@ builder.Services.AddCors(options =>
 });
 
 // Service 파일 등록
-builder.Services.AddScoped<ListEventsService>();
-builder.Services.AddScoped<EventDetailService>();
-builder.Services.AddScoped<AddEventService>();
-builder.Services.AddScoped<LoginService>();
-builder.Services.AddScoped<RegisterService>();
-builder.Services.AddScoped<PasswordResetService>();
-builder.Services.AddScoped<ReserveService>();
-builder.Services.AddScoped<SelectionService>();
-builder.Services.AddScoped<PaymentService>();
-builder.Services.AddSingleton<QueueService>();
-builder.Services.AddScoped<MyReservationsService>();
-builder.Services.AddScoped<MyProfileService>();
-builder.Services.AddScoped<PhoneVerificationService>();
+// builder.Services.AddScoped<ListEventsService>();
+// builder.Services.AddScoped<EventDetailService>();
+builder.Services.AddAuthFeature();
+// builder.Services.AddScoped<ReserveService>();
+// builder.Services.AddScoped<SelectionService>();
+// builder.Services.AddScoped<PaymentService>();
+// builder.Services.AddSingleton<QueueService>();
+// builder.Services.AddScoped<MyReservationsService>();
+// builder.Services.AddScoped<MyProfileService>();
+// builder.Services.AddScoped<PhoneVerificationService>();
 builder.Services.AddSingleton<ISmsSender, LoggingSmsSender>();
 builder.Services.AddSingleton(sp =>
 {
@@ -125,10 +122,12 @@ builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 builder.Services.AddOptions<PortOneOptions>()
     .Configure<IConfiguration>((o, c) =>
     {
-        o.ApiSecret = c["PortOne:ApiSecret"] ?? c["PORTONE_SECRET"] ?? "";
-        o.StoreId = c["PortOne:StoreId"] ?? c["PORTONE_STORE_ID"] ?? c["PORTONE_MID"] ?? "";
-        o.WebhookSecret = c["PortOne:WebhookSecret"] ?? c["PORTONE_WEBHOOK_SECRET"] ?? "";
-        o.ApiBaseUrl = c["PortOne:ApiBaseUrl"] ?? c["PORTONE_API_BASE_URL"] ?? "https://api.portone.io";
+        o.ApiSecret = c["PORTONE:API_SECRET"] ?? "";
+        o.StoreId = c["PORTONE:STORE_ID"] ?? "";
+        o.WebhookSecret = c["PORTONE:WEBHOOK_SECRET"] ?? "";
+        o.ApiBaseUrl = c["PORTONE:API_BASE_URL"] ?? "";
+        o.VerifyChannelId = c["PORTONE:VERIFY_CHANNEL_ID"] ?? "";
+        o.PaymentChannelId = c["PORTONE:PAYMENT_CHANNEL_ID"] ?? "";
     });
 
 builder.Services.AddHttpClient("PortOne", (sp, client) =>
@@ -138,6 +137,7 @@ builder.Services.AddHttpClient("PortOne", (sp, client) =>
     client.Timeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddSingleton<IPortOnePaymentApi, PortOnePaymentApiClient>();
+builder.Services.AddSingleton<IPortOneIvVerifyService, PortOneIvVerifyService>();
 
 // Redis 연결 (singleton으로 등록하여 애플리케이션 전체에서 공유)
 // RedisOptions 등록
@@ -177,6 +177,13 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     return ConnectionMultiplexer.Connect(options);
 });
 
+builder.Services.AddScoped<IDatabase>(sp =>
+{
+    var mux = sp.GetRequiredService<IConnectionMultiplexer>();
+    var redis = sp.GetRequiredService<RedisOptions>();
+    return mux.GetDatabase(redis.Db);
+});
+
 var host = builder.Configuration["DATABASE_HOST"];
 var port = builder.Configuration["DATABASE_PORT"];
 var db = builder.Configuration["DATABASE_NAME"];
@@ -214,17 +221,14 @@ app.MapGet("/api/health", () => Results.Json(new { status = "ok" }))
     .AllowAnonymous();
 
 // Endpoint 파일 등록
-LoginEndpoint.Map(app);
-RegisterEndpoint.Map(app);
-PasswordResetEndpoint.Map(app);
-ListEndpoint.Map(app);
-DetailEndpoint.Map(app);
-AddEventEndpoint.Map(app);
-ReserveEndpoint.Map(app);
-QueueEndpoint.Map(app);
-SelectionEndpoint.Map(app);
-PaymentEndpoint.Map(app);
-MyReservationsEndpoint.Map(app);
-MyProfileEndpoint.Map(app);
+AuthEndpoints.Map(app);
+// ListEndpoint.Map(app);
+// DetailEndpoint.Map(app);
+// ReserveEndpoint.Map(app);
+// QueueEndpoint.Map(app);
+// SelectionEndpoint.Map(app);
+// PaymentEndpoint.Map(app);
+// MyReservationsEndpoint.Map(app);
+// MyProfileEndpoint.Map(app);
 
 app.Run();

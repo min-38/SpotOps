@@ -1,66 +1,65 @@
 using SpotOps.Contracts;
-using SpotOps.Models;
-using System.Security.Claims;
 
 namespace SpotOps.Features.Auth.Login;
 
-public static class LoginEndpoint
+public static partial class LoginEndpoint
 {
-    public static void Map(WebApplication app)
+    public static void Map(RouteGroupBuilder auth)
     {
-        var group = app.MapGroup("/api/auth").WithTags("Auth");
+        auth.MapPost("/login", LoginAsync).AllowAnonymous();
+        auth.MapPost("/refresh", RefreshAsync).AllowAnonymous();
+    }
 
-        group.MapPost("/login",
-            async (LoginDto body, LoginService login, CancellationToken cancellationToken) =>
-            {
-                var (user, error) = await login.ValidateAsync(body, cancellationToken);
-                if (error is not null || user is null)
-                    return Results.Json(
-                        ApiResponse<LoginUserDto>.Fail("AUTH_INVALID_CREDENTIALS", error),
-                        statusCode: StatusCodes.Status401Unauthorized);
+    public static async Task<IResult> LoginAsync(
+        LoginRequest request,
+        ILoginService loginService,
+        CancellationToken ct)
+    {
+        if (!LoginValidation.ValidateLoginRequest(request))
+            return Results.Json(
+                ApiResponse<LoginResponse>.Fail("VALIDATION_FAILED"),
+                statusCode: StatusCodes.Status400BadRequest);
 
-                if (user.Role is not UserRole.Buyer)
-                    return Results.Json(
-                        ApiResponse<LoginUserDto>.Fail("AUTH_INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않아요."),
-                        statusCode: StatusCodes.Status401Unauthorized);
+        var user = await loginService.ValidateAsync(request.Email, request.Password, ct);
+        if (user is null)
+            return Results.Json(
+                ApiResponse<LoginResponse>.Fail("AUTH_INVALID_CREDENTIALS"),
+                statusCode: StatusCodes.Status401Unauthorized);
 
-                var tokens = await login.CreateTokenPairAsync(user, cancellationToken);
+        var tokens = await loginService.CreateTokenPairAsync(user, ct);
+        var payload = new LoginResponse(
+            user.Id,
+            user.Email,
+            user.Name,
+            new JWTResponse(
+                tokens.AccessToken,
+                "Bearer",
+                tokens.ExpiresInSeconds,
+                tokens.RefreshToken,
+                tokens.RefreshTokenExpiresInSeconds
+            )
+        );
 
-                var payload = new LoginUserDto(
-                    user.Id,
-                    user.Email,
-                    user.Name,
-                    user.Role.ToString(),
-                    tokens);
-                return Results.Json(ApiResponse<LoginUserDto>.Ok(payload));
-            }).AllowAnonymous();
+        return Results.Json(ApiResponse<LoginResponse>.Ok(payload));
+    }
 
-        group.MapPost("/refresh", async (RefreshTokenRequestDto body, LoginService login, CancellationToken cancellationToken) =>
-        {
-            var (user, tokens, errorCode, errorMessage) = await login.RefreshAsync(body.RefreshToken, cancellationToken);
-            if (user is null || tokens is null)
-                return Results.Json(
-                    ApiResponse<LoginUserDto>.Fail(errorCode ?? "AUTH_REFRESH_TOKEN_INVALID", errorMessage),
-                    statusCode: StatusCodes.Status401Unauthorized);
+    public static async Task<IResult> RefreshAsync(
+        RefreshTokenRequest request,
+        ILoginService loginService,
+        CancellationToken ct)
+    {
+        if (!LoginValidation.ValidateRefreshTokenRequest(request))
+            return Results.Json(
+                ApiResponse<LoginResponse>.Fail("VALIDATION_FAILED"),
+                statusCode: StatusCodes.Status400BadRequest);
 
-            var payload = new LoginUserDto(
-                user.Id,
-                user.Email,
-                user.Name,
-                user.Role.ToString(),
-                tokens);
-            return Results.Json(ApiResponse<LoginUserDto>.Ok(payload));
-        }).AllowAnonymous();
+        var (user, tokens, errorCode) = await loginService.RefreshTokenAsync(request.RefreshToken, ct);
+        if (user is null || tokens is null)
+            return Results.Json(
+                ApiResponse<LoginResponse>.Fail(errorCode ?? "AUTH_REFRESH_TOKEN_INVALID"),
+                statusCode: StatusCodes.Status401Unauthorized);
 
-        group.MapPost("/logout", async (LogoutRequestDto body, LoginService login, ClaimsPrincipal user, CancellationToken cancellationToken) =>
-        {
-            if (Guid.TryParse(user.FindFirstValue(ClaimTypes.NameIdentifier), out var userId)
-                && !string.IsNullOrWhiteSpace(body.RefreshToken))
-            {
-                await login.RevokeRefreshTokenAsync(userId, body.RefreshToken, cancellationToken);
-            }
-
-            return Results.Json(ApiResponse<object?>.Ok(null));
-        }).RequireAuthorization();
+        var payload = new LoginResponse(user.Id, user.Email, user.Name, tokens);
+        return Results.Json(ApiResponse<LoginResponse>.Ok(payload));
     }
 }

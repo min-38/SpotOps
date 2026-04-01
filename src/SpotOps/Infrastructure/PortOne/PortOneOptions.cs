@@ -12,4 +12,10 @@ public sealed class PortOneOptions
     public string WebhookSecret { get; set; } = "";
 
     public string ApiBaseUrl { get; set; } = "https://api.portone.io";
+
+    /// <summary>본인인증 채널 ID (클라이언트 SDK 연동용; API Secret과 구분).</summary>
+    public string VerifyChannelId { get; set; } = "";
+
+    /// <summary>결제 채널 ID.</summary>
+    public string PaymentChannelId { get; set; } = "";
 }
