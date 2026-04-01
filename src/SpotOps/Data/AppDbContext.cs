@@ -27,6 +27,8 @@ public class AppDbContext : DbContext
             entity.Property(u => u.Id).HasColumnName("id");
             entity.Property(u => u.Email).HasColumnName("email");
             entity.Property(u => u.PasswordHash).HasColumnName("password_hash");
+            entity.Property(u => u.Name).HasColumnName("name");
+            entity.Property(u => u.Phone).HasColumnName("phone");
             entity.Property(u => u.LastLoginAt).HasColumnName("last_login_at");
             entity.Property(u => u.IsActive).HasColumnName("is_active");
             entity.Property(u => u.CreatedAt).HasColumnName("created_at");

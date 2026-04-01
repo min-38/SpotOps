@@ -64,9 +64,20 @@ public sealed partial class LoginService : ILoginService
         }
 
         var refreshToken = _jwtTokenService.CreateRefreshToken();
-        var refreshTokenExpiresInSeconds = _jwtTokenService.GetRefreshTokenTtlDays();
+        var ttlDays = _jwtTokenService.GetRefreshTokenTtlDays();
+        var refreshTokenExpiresInSeconds = ttlDays * 24L * 60 * 60;
 
-        _logger.LogInformation("Token pair created for user {UserId}: {AccessToken}, {RefreshToken}", user.Id, accessToken, refreshToken);
+        var now = DateTime.UtcNow;
+        _db.RefreshTokens.Add(new RefreshToken
+        {
+            UserId = user.Id,
+            TokenHash = _jwtTokenService.HashRefresh(refreshToken),
+            ExpiresAt = now.AddDays(ttlDays),
+            CreatedAt = now
+        });
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Token pair created for user {UserId}", user.Id);
 
         return new JWTResponse(accessToken, "Bearer", expiresInSeconds, refreshToken, refreshTokenExpiresInSeconds);
     }

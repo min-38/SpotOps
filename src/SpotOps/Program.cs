@@ -146,12 +146,12 @@ builder.Services.AddSingleton(_ =>
     var c = builder.Configuration;
     return new RedisOptions
     {
-        Host = c["REDIS_HOST"] ?? "localhost",
-        Port = c.GetValue("REDIS_PORT", 6379),
-        Password = c["REDIS_PASSWORD"] ?? "",
-        Db = c.GetValue("REDIS_DB", 0),
-        KeyPrefix = c["REDIS_KEY_PREFIX"] ?? "spotops",
-        DefaultTtlHours = c.GetValue("REDIS_DEFAULT_TTL_HOURS", 24)
+        Host = c["REDIS:HOST"] ?? "localhost",
+        Port = c.GetValue("REDIS:PORT", 6379),
+        Password = c["REDIS:PASSWORD"] ?? "",
+        Db = c.GetValue("REDIS:DB", 0),
+        KeyPrefix = c["REDIS:KEY_PREFIX"] ?? "spotops",
+        DefaultTtlHours = c.GetValue("REDIS:DEFAULT_TTL_HOURS", 24)
     };
 });
 

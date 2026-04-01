@@ -42,18 +42,21 @@ public sealed partial class RegisterService : IRegisterService
     }
 
     // 본인인증 검증
-    public async Task<(bool Success, PortOneVerifiedIdentityResponse? VerifiedIdentity, string? ErrorCode)> VerifyIvAsync(
+    public async Task<(bool Success, PortOneVerifiedIdentityResponse? VerifiedIdentity, string? ErrorCode, string? ExistingMaskedEmail)> VerifyIvAsync(
         PortOneIvVerifyRequest request,
         CancellationToken ct = default)
     {
         // 본인인증 검증 요청
         var (success, identityVerification, errorCode) = await _portOneIvService.VerifyAsync(request.IdentityVerificationId, ct);
         if (!success)
-            return (false, null, errorCode ?? "AUTH_VERIFY_IV_FAILED");
+            return (false, null, errorCode ?? "AUTH_VERIFY_IV_FAILED", null);
 
         // 검증 결과가 없으면 오류 반환
         if (identityVerification is null)
-            return (false, null, "AUTH_VERIFY_IV_INVALID_RESPONSE");
+        {
+            _logger.LogInformation("identityVerification is null");
+            return (false, null, "AUTH_VERIFY_IV_INVALID_RESPONSE", null);
+        }
 
         // 검증 결과를 프로필로 변환
         var verifiedProfile = ToVerifiedIdentityProfile(identityVerification.Value);
@@ -62,12 +65,22 @@ public sealed partial class RegisterService : IRegisterService
         var normalizedVerifiedPhone = NormalizePhone(verifiedProfile.PhoneNumber);
         var normalizedVerifiedGender = NormalizeGender(verifiedProfile.Gender);
         var normalizedUniqueKey = NormalizeUniqueKey(verifiedProfile.UniqueKey);
+
         if (normalizedVerifiedBirthday is null
             || normalizedVerifiedPhone is null
             || normalizedVerifiedGender is null
             || normalizedUniqueKey is null
             || string.IsNullOrWhiteSpace(verifiedProfile.Name))
-            return (false, null, "AUTH_VERIFY_IV_INVALID_RESPONSE");
+            return (false, null, "AUTH_VERIFY_IV_INVALID_RESPONSE", null);
+
+        var existingMaskedEmail = await FindExistingMaskedEmailAsync(
+            normalizedUniqueKey,
+            verifiedProfile.Name,
+            normalizedVerifiedBirthday,
+            normalizedVerifiedPhone,
+            ct);
+        if (!string.IsNullOrWhiteSpace(existingMaskedEmail))
+            return (false, null, "AUTH_REGISTER_ALREADY_EXISTS", existingMaskedEmail);
 
         var normalizedName = verifiedProfile.Name.Trim();
         var verificationToken = Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(32));
@@ -96,7 +109,7 @@ public sealed partial class RegisterService : IRegisterService
 
         _logger.LogInformation("Identity verification succeeded and token was issued.");
 
-        return (true, response, null);
+        return (true, response, null, null);
     }
 
     /// <summary>
@@ -112,7 +125,7 @@ public sealed partial class RegisterService : IRegisterService
         var cacheKey = BuildVerificationCacheKey(_redisOptions.KeyPrefix, request.VerificationToken);
         var cachedRaw = await _redis.StringGetAsync(cacheKey);
         if (cachedRaw.IsNullOrEmpty)
-            return (false, "AUTH_REGISTER_INVALID_REQUEST");
+            return (false, "AUTH_VERIFY_IV_EXPIRED");
 
         var cached = JsonSerializer.Deserialize<VerifiedIdentityCache>(cachedRaw.ToString());
         if (cached is null)
@@ -154,7 +167,8 @@ public sealed partial class RegisterService : IRegisterService
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             Name = cachedName,
             Phone = cachedPhone,
-            CreatedAt = now
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         _db.Users.Add(user);
@@ -174,7 +188,8 @@ public sealed partial class RegisterService : IRegisterService
             Ci = _sensitiveDataProtector.Protect(cachedUniqueKey),
             Di = _sensitiveDataProtector.Protect(cachedDi),
             ProviderTransactionId = cached.IdentityVerificationId,
-            CreatedAt = now
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         _db.UserVerifications.Add(verification);
@@ -185,12 +200,19 @@ public sealed partial class RegisterService : IRegisterService
 
     private static VerifiedIdentityProfile ToVerifiedIdentityProfile(JsonElement identityVerification)
     {
+        var source = identityVerification;
+        if (identityVerification.TryGetProperty("verifiedCustomer", out var verifiedCustomer)
+            && verifiedCustomer.ValueKind == JsonValueKind.Object)
+        {
+            source = verifiedCustomer;
+        }
+
         return new VerifiedIdentityProfile(
-            Name: TryGetString(identityVerification, "name", "fullName"),
-            Gender: TryGetString(identityVerification, "gender", "sex"),
-            Birthday: TryGetString(identityVerification, "birthday", "birthDate", "birthdate", "dateOfBirth"),
-            UniqueKey: TryGetString(identityVerification, "unique_key", "uniqueKey", "ci", "CI"),
-            PhoneNumber: TryGetString(identityVerification, "phoneNumber", "phone", "phoneNo", "mobile"));
+            Name: TryGetString(source, "name", "fullName"),
+            Gender: TryGetString(source, "gender", "sex"),
+            Birthday: TryGetString(source, "birthday", "birthDate", "birthdate", "dateOfBirth"),
+            UniqueKey: TryGetString(source, "unique_key", "uniqueKey", "ci", "CI", "id"),
+            PhoneNumber: TryGetString(source, "phoneNumber", "phone", "phoneNo", "mobile"));
     }
 
     private static string? TryGetString(JsonElement element, params string[] propertyNames)
@@ -301,6 +323,118 @@ public sealed partial class RegisterService : IRegisterService
         var updated = cached with { FailedAttempts = nextAttempts };
         await _redis.StringSetAsync(cacheKey, JsonSerializer.Serialize(updated), expiration);
         return nextAttempts;
+    }
+
+    private async Task<string?> FindExistingMaskedEmailAsync(
+        string normalizedUniqueKey,
+        string? verifiedName,
+        string normalizedBirthday,
+        string normalizedPhone,
+        CancellationToken ct)
+    {
+        // 1. CI로 매칭되는 사용자 찾기
+        // CI는 본인인증 결과에서 받은 고유 키
+        var verificationRows = await _db.UserVerifications
+            .AsNoTracking()
+            .Where(v => v.Status == VerificationStatus.Verified && v.Ci != null)
+            .Select(v => new { v.UserId, v.Ci })
+            .ToListAsync(ct);
+
+        Guid? matchedUserId = null;
+        foreach (var row in verificationRows)
+        {
+            var ci = _sensitiveDataProtector.Unprotect(row.Ci);
+            if (string.Equals(NormalizeUniqueKey(ci), normalizedUniqueKey, StringComparison.Ordinal))
+            {
+                matchedUserId = row.UserId;
+                break;
+            }
+        }
+
+        // CI로 매칭되는 사용자가 없으면 생년월일, 이름, 전화번호로 매칭되는 사용자 찾기
+        if (matchedUserId is null)
+        {
+            if (DateOnly.TryParseExact(
+                    normalizedBirthday,
+                    "yyyy-MM-dd",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out var parsedBirthDate))
+            {
+                var normalizedName = string.IsNullOrWhiteSpace(verifiedName)
+                    ? null
+                    : verifiedName.Trim();
+
+                if (!string.IsNullOrWhiteSpace(normalizedName))
+                {
+                    var candidates = await (
+                        from v in _db.UserVerifications.AsNoTracking()
+                        join u in _db.Users.AsNoTracking() on v.UserId equals u.Id
+                        where v.Status == VerificationStatus.Verified
+                              && v.BirthDate == parsedBirthDate
+                              && u.Name == normalizedName
+                              && u.Phone != null
+                        select new { u.Id, u.Phone, u.Email }
+                    ).ToListAsync(ct);
+
+                    foreach (var candidate in candidates)
+                    {
+                        if (string.Equals(NormalizePhone(candidate.Phone), normalizedPhone, StringComparison.Ordinal))
+                        {
+                            matchedUserId = candidate.Id;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 매칭되는 사용자가 없으면 null 반환
+        if (matchedUserId is null)
+            return null;
+
+        // 매칭되는 사용자가 있다면 그 사용자가 가입했던 이메일을 반환
+        // 단, 이메일을 마스킹하여 반환
+        var email = await _db.Users
+            .AsNoTracking()
+            .Where(u => u.Id == matchedUserId.Value)
+            .Select(u => u.Email)
+            .FirstOrDefaultAsync(ct);
+
+        return string.IsNullOrWhiteSpace(email) ? null : MaskEmail(email);
+    }
+
+    private static string MaskEmail(string email)
+    {
+        var at = email.IndexOf('@');
+        if (at <= 0)
+            return "****";
+
+        var local = email[..at];
+        var domain = email[at..];
+        const string mask = "******";
+
+        var headLength = local.Length switch
+        {
+            <= 3 => 1,
+            4 => 1,
+            _ => 2
+        };
+
+        var tailLength = local.Length switch
+        {
+            >= 6 => 2,
+            5 => 1,
+            4 => 1,
+            _ => 0
+        };
+
+        if (local.Length <= headLength)
+            return $"{local[..1]}{mask}{domain}";
+
+        var head = local[..headLength];
+        var tail = tailLength > 0 ? local[^tailLength..] : string.Empty;
+        return $"{head}{mask}{tail}{domain}";
     }
 
     private sealed record VerifiedIdentityCache(

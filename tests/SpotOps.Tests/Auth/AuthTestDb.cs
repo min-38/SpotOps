@@ -20,12 +20,15 @@ internal static class AuthTestDb
         string phone = "01012345678",
         string rawPassword = "Correct123!")
     {
+        var now = DateTime.UtcNow;
         return new User
         {
             Email = email ?? $"user-{Guid.NewGuid():N}@example.com",
             Name = name,
             Phone = phone,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(rawPassword)
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(rawPassword),
+            CreatedAt = now,
+            UpdatedAt = now
         };
     }
 }

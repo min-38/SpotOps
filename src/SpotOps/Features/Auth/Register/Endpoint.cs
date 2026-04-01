@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Microsoft.Extensions.Options;
 using SpotOps.Contracts;
 using SpotOps.Features.Auth;
@@ -34,15 +35,27 @@ public static partial class RegisterEndpoint
                 ApiResponse<object?>.Fail("AUTH_VERIFY_IV_INVALID_REQUEST"),
                 statusCode: StatusCodes.Status400BadRequest);
 
-        var (success, verifiedIdentity, errorCode) = await registerService.VerifyIvAsync(request, ct);
+        var (success, verifiedIdentity, errorCode, existingMaskedEmail) = await registerService.VerifyIvAsync(request, ct);
         if (!success)
+        {
+            if (errorCode == "AUTH_REGISTER_ALREADY_EXISTS" && !string.IsNullOrWhiteSpace(existingMaskedEmail))
+                return Results.Json(
+                    ApiResponse<object?>.Fail(
+                        errorCode,
+                        new Dictionary<string, string[]>
+                        {
+                            ["email"] = [existingMaskedEmail]
+                        }),
+                    statusCode: StatusCodes.Status400BadRequest);
+
             return Results.Json(
                 ApiResponse<object?>.Fail(errorCode ?? "AUTH_VERIFY_IV_FAILED"),
                 statusCode: StatusCodes.Status400BadRequest);
+        }
 
         if (verifiedIdentity is null)
             return Results.Json(
-                ApiResponse<object?>.Fail("AUTH_VERIFY_IV_INVALID_RESPONSE"),
+                ApiResponse<object?>.Fail(errorCode ?? "AUTH_VERIFY_IV_INVALID_RESPONSE"),
                 statusCode: StatusCodes.Status400BadRequest);
 
         return Results.Json(ApiResponse<PortOneVerifiedIdentityResponse>.Ok(verifiedIdentity));

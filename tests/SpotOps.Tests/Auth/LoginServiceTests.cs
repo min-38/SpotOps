@@ -24,6 +24,35 @@ public class LoginServiceTests
     }
 
     // 성공
+    // 로그인 시 refresh_tokens에 해시 저장
+    [Fact]
+    public async Task CreateTokenPairAsync_PersistsRefreshToken_WhenCalled()
+    {
+        await using var db = CreateDbContext();
+        var user = AuthTestDb.CreateUser(phone: "01012345678");
+        db.Users.Add(user);
+        await db.SaveChangesAsync();
+
+        var jwt = new StubJwtTokenService
+        {
+            NewRefreshToken = "login_refresh_raw",
+            NewRefreshHash = "login_refresh_hash"
+        };
+        var service = new LoginService(db, jwt, NullLogger<LoginService>.Instance);
+
+        var tokens = await service.CreateTokenPairAsync(user);
+
+        Assert.Equal("login_refresh_raw", tokens.RefreshToken);
+        Assert.Equal(14L * 24 * 60 * 60, tokens.RefreshTokenExpiresInSeconds);
+
+        var stored = await db.RefreshTokens.SingleAsync();
+        Assert.Equal(user.Id, stored.UserId);
+        Assert.Equal("login_refresh_hash", stored.TokenHash);
+        Assert.Null(stored.RevokedAt);
+        Assert.True(stored.ExpiresAt > DateTime.UtcNow);
+    }
+
+    // 성공
     // 정상 요청의 경우
     [Fact]
     public async Task ValidateAsync_ReturnsUser_WhenCredentialsValid()
